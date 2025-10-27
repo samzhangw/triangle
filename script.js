@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const player1ScoreBox = document.getElementById('player1-score');
     const player2ScoreBox = document.getElementById('player2-score');
     const gameOverMessage = document.getElementById('game-over-message');
-    const winnerText = document.getElementById('winner-text');
+    const winnerText = document.getElementById('winnerText');
     const confirmLineButton = document.getElementById('confirm-line-button');
     const cancelLineButton = document.getElementById('cancel-line-button');
     const actionBar = document.getElementById('action-bar');
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // 6. 檢查得分 (此邏輯現在將 *重新生效*)
-        let scoredThisTurn = false;
+        // 【注意】 規則修改：我們不再需要 scoredThisTurn 變數，但保留計分邏輯
         let totalFilledThisGame = 0;
         
         triangles.forEach(tri => {
@@ -370,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tri.filled = true;
                     tri.player = currentPlayer;
                     scores[currentPlayer]++;
-                    scoredThisTurn = true;
+                    // scoredThisTurn = true; // 此變數不再需要
                 }
             }
             if (tri.filled) totalFilledThisGame++;
@@ -391,10 +391,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 10. 如果沒有得分，則換人
-        if (!scoredThisTurn) {
-            switchPlayer();
-        }
+        // 10. 【規則修改】 無論是否得分，一律換人
+        switchPlayer();
     }
 
     // "取消選取" 按鈕的函式
