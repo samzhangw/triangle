@@ -1,31 +1,33 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 取得 HTML 元素
+    // 取得 HTML 元素 (相同)
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
     const score1El = document.getElementById('score1');
     const score2El = document.getElementById('score2');
     const player1ScoreBox = document.getElementById('player1-score');
     const player2ScoreBox = document.getElementById('player2-score');
-    const gameOverMessage = document.getElementById('game-over-message'); // 這是 Modal 的內容
+    const gameOverMessage = document.getElementById('game-over-message'); 
     const winnerText = document.getElementById('winnerText');
     const confirmLineButton = document.getElementById('confirm-line-button');
     const cancelLineButton = document.getElementById('cancel-line-button');
     const actionBar = document.getElementById('action-bar');
     const resetButton = document.getElementById('reset-button');
-
-    // 【新】 取得 Modal 相關元素
     const modalOverlay = document.getElementById('modal-overlay');
     const resetButtonModal = document.getElementById('reset-button-modal');
 
-    // 遊戲設定 (...相同...)
-    const ROW_LENGTHS = [4, 5, 6, 7, 6, 5, 4]; // 菱形網格的定義
-    const DOT_SPACING_X = 100; // 點的水平間距
-    const DOT_SPACING_Y = DOT_SPACING_X * Math.sqrt(3) / 2; // 點的垂直間距 (等邊三角形的高)
-    const PADDING = 50;
-    const DOT_RADIUS = 6;
-    const LINE_WIDTH = 4;
-    const CLICK_TOLERANCE_DOT = 15;
-    const ANGLE_TOLERANCE = 1.5; // 角度容許誤差
+    // 【新】 偵測是否為手機
+    const isMobile = window.innerWidth < 768;
+    
+    // 【修改】 遊戲設定 (根據是否為手機動態調整)
+    const ROW_LENGTHS = [4, 5, 6, 7, 6, 5, 4]; // 菱形網格的定義 (相同)
+    const DOT_SPACING_X = isMobile ? 60 : 100; // 手機版間距縮小
+    const DOT_SPACING_Y = DOT_SPACING_X * Math.sqrt(3) / 2;
+    const PADDING = isMobile ? 30 : 50; // 手機版邊距縮小
+    const DOT_RADIUS = isMobile ? 5 : 6; // 手機版點半徑
+    const LINE_WIDTH = isMobile ? 3.5 : 4; // 手機版線寬
+    const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; // 手機版點擊範圍加大
+    const ANGLE_TOLERANCE = 1.5; // 角度容許誤差 (相同)
+
 
     // 玩家顏色 (與 CSS 相同)
     const PLAYER_COLORS = {
@@ -35,14 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const DEFAULT_LINE_COLOR = '#e0e0e0';
 
-    // 遊戲狀態 (...相同...)
+    // 遊戲狀態 (相同)
     let currentPlayer = 1;
     let scores = { 1: 0, 2: 0 };
-    let dots = []; // [r][c]
-    let lines = {}; // key: "id"
+    let dots = []; 
+    let lines = {}; 
     let triangles = [];
     let totalTriangles = 0;
-    
     let selectedDot1 = null;
     let selectedDot2 = null;
 
@@ -60,13 +61,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化遊戲
     function initGame() {
-        // 1. 計算畫布大小 (...相同...)
+        // 1. 計算畫布大小 (相同邏輯，但使用動態變數)
         const gridWidth = (Math.max(...ROW_LENGTHS) - 1) * DOT_SPACING_X;
         const gridHeight = (ROW_LENGTHS.length - 1) * DOT_SPACING_Y;
         canvas.width = gridWidth + PADDING * 2;
         canvas.height = gridHeight + PADDING * 2;
 
-        // 2. 重置所有狀態
+        // 2. 重置所有狀態 (相同)
         currentPlayer = 1;
         scores = { 1: 0, 2: 0 };
         dots = [];
@@ -75,11 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
         totalTriangles = 0;
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.add('hidden');
-        // 【修改】 隱藏 modal
+        actionBar.classList.remove('visible'); 
         modalOverlay.classList.add('hidden'); 
 
-        // 3. 產生所有點的座標 (r, c) (...相同...)
+        // 3. 產生所有點的座標 (r, c) (相同邏輯)
         dots = [];
         ROW_LENGTHS.forEach((len, r) => {
             dots[r] = [];
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 4. 產生所有 "相鄰" 線段 (用於計分和虛線) (...相同...)
+        // 4. 產生所有 "相鄰" 線段 (用於計分和虛線) (相同)
         lines = {};
         for (let r = 0; r < ROW_LENGTHS.length; r++) {
             for (let c = 0; c < ROW_LENGTHS[r]; c++) {
@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 5. 產生所有三角形 (計分用) (...相同...)
+        // 5. 產生所有三角形 (計分用) (相同)
         triangles = [];
         totalTriangles = 0;
         for (let r = 0; r < ROW_LENGTHS.length - 1; r++) {
@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
 
-    // 繪製所有遊戲元素 (相同)
+    // 繪製所有遊戲元素
     function drawCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         triangles.forEach(tri => {
@@ -217,7 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineTo(line.p2.x, line.p2.y);
             if (line.drawn) {
                 ctx.strokeStyle = PLAYER_COLORS[line.player].line;
-                ctx.lineWidth = LINE_WIDTH;
+                // 【修改】 使用動態 LINE_WIDTH
+                ctx.lineWidth = LINE_WIDTH; 
             } else {
                 ctx.strokeStyle = DEFAULT_LINE_COLOR;
                 ctx.lineWidth = 1;
@@ -229,7 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dots.forEach(row => {
             row.forEach(dot => {
                 ctx.beginPath();
-                ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI);
+                // 【修改】 使用動態 DOT_RADIUS
+                ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI); 
                 ctx.fillStyle = '#34495e';
                 ctx.fill();
             });
@@ -237,7 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
         [selectedDot1, selectedDot2].forEach(dot => {
             if (dot) {
                 ctx.beginPath();
-                ctx.arc(dot.x, dot.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
+                // 【修改】 使用動態 DOT_RADIUS
+                ctx.arc(dot.x, dot.y, DOT_RADIUS + 3, 0, 2 * Math.PI); 
                 ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
                 ctx.lineWidth = 3;
                 ctx.stroke();
@@ -247,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 點擊/觸控畫布 (相同)
     function handleCanvasClick(e) {
-        if (!actionBar.classList.contains('hidden')) {
+        if (actionBar.classList.contains('visible')) {
             return;
         }
         const rect = canvas.getBoundingClientRect();
@@ -276,31 +279,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedDot1 = null;
             } else {
                 selectedDot2 = clickedDot;
-                actionBar.classList.remove('hidden');
+                actionBar.classList.add('visible');
             }
         }
         drawCanvas();
     }
 
-    // "確認連線" 按鈕的函式
+    // "確認連線" 按鈕的函式 (相同)
     function confirmLine() {
         if (!selectedDot1 || !selectedDot2) return;
         const dotA = selectedDot1;
         const dotB = selectedDot2;
         
-        // 1. 角度檢查 (...相同...)
+        // 1. 角度檢查 (相同)
         const dy = dotB.y - dotA.y;
         const dx = dotB.x - dotA.x;
-        
         if (dx !== 0 || dy !== 0) {
             const angle = Math.atan2(dy, dx) * 180 / Math.PI;
             const absAngle = Math.abs(angle);
-
             const isValidAngle = isClose(absAngle, 0) || 
                                  isClose(absAngle, 60) || 
                                  isClose(absAngle, 120) || 
                                  isClose(absAngle, 180);
-
             if (!isValidAngle) {
                 alert("無效的線條 (必須是 0, 60, 120 或 180 度)");
                 cancelLine();
@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 2. 拆解長線為短線並執行 (...相同...)
+        // 2. 拆解長線為短線並執行 (相同)
         const allDotsOnLine = findIntermediateDots(dotA, dotB);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
@@ -347,9 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        // 6. 檢查得分
+        // 6. 檢查得分 (相同)
         let totalFilledThisGame = 0;
-        
         triangles.forEach(tri => {
             if (!tri.filled) {
                 const isComplete = tri.lineKeys.every(key => lines[key] && lines[key].drawn);
@@ -358,10 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     tri.player = currentPlayer;
                     scores[currentPlayer]++;
                     
-                    // 【新】 觸發得分動畫
                     const scoreBox = (currentPlayer === 1) ? player1ScoreBox : player2ScoreBox;
                     scoreBox.classList.add('score-pulse');
-                    // 400ms 後移除 class，動畫 (0.4s) 剛好播完
                     setTimeout(() => {
                         scoreBox.classList.remove('score-pulse');
                     }, 400); 
@@ -370,22 +367,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tri.filled) totalFilledThisGame++;
         });
 
-        // 7. 重置選取
+        // 7. 重置選取 (相同)
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.add('hidden');
+        actionBar.classList.remove('visible'); 
         
-        // 8. 繪製並更新 UI
+        // 8. 繪製並更新 UI (相同)
         drawCanvas();
-        updateUI(); // updateUI 會更新分數文字
+        updateUI(); 
 
-        // 9. 檢查遊戲是否結束
+        // 9. 檢查遊戲是否結束 (相同)
         if (totalFilledThisGame === totalTriangles) {
             endGame();
             return;
         }
 
-        // 10. 【規則修改】 無論是否得分，一律換人
+        // 10. 【規則修改】 無論是否得分，一律換人 (相同)
         switchPlayer();
     }
 
@@ -393,20 +390,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function cancelLine() {
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.add('hidden');
+        actionBar.classList.remove('visible');
         drawCanvas();
     }
 
 
-    // ----- 輔助函式 (相同) -----
+    // ----- 輔助函式 -----
 
+    // (相同)
     function isClose(val, target) {
         return Math.abs(val - target) < ANGLE_TOLERANCE;
     }
 
+    // 輔助函式 - 找到最近的點
     function findNearestDot(mouseX, mouseY) {
         let nearestDot = null;
-        let minDisSq = CLICK_TOLERANCE_DOT ** 2;
+        // 【修改】 使用動態 CLICK_TOLERANCE_DOT
+        let minDisSq = CLICK_TOLERANCE_DOT ** 2; 
         dots.forEach(row => {
             row.forEach(dot => {
                 const distSq = (mouseX - dot.x) ** 2 + (mouseY - dot.y) ** 2;
@@ -419,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return nearestDot;
     }
 
+    // (相同)
     function findIntermediateDots(dotA, dotB) {
         const intermediateDots = [];
         const minX = Math.min(dotA.x, dotB.x) - 1;
@@ -450,13 +451,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUI();
     }
 
-    // 更新分數和玩家狀態
+    // 更新分數和玩家狀態 (相同)
     function updateUI() {
         score1El.textContent = scores[1];
         score2El.textContent = scores[2];
         
-        // 【註】 .score-pulse 的移除交給 setTimeout
-        // 這裡只處理 .active 狀態
         if (currentPlayer === 1) {
             player1ScoreBox.classList.add('active');
             player2ScoreBox.classList.remove('active', 'player2');
@@ -466,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 遊戲結束
+    // 遊戲結束 (相同)
     function endGame() {
         let winnerMessage = "";
         if (scores[1] > scores[2]) {
@@ -478,13 +477,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         winnerText.textContent = winnerMessage;
         
-        // 【修改】 顯示 Modal 彈窗
         modalOverlay.classList.remove('hidden'); 
-
-        actionBar.classList.add('hidden');
+        actionBar.classList.remove('visible'); 
     }
 
-    // 綁定所有事件
+    // 綁定所有事件 (相同)
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('touchstart', function(e) {
         e.preventDefault();
@@ -492,13 +489,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     resetButton.addEventListener('click', initGame);
-    
-    // 【新】 綁定 Modal 內的重置按鈕
     resetButtonModal.addEventListener('click', initGame);
-
     confirmLineButton.addEventListener('click', confirmLine);
     cancelLineButton.addEventListener('click', cancelLine);
 
-    // 啟動遊戲
+    // 啟動遊戲 (相同)
     initGame();
 });
