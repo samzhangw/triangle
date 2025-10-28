@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const DOT_SPACING_Y = DOT_SPACING_X * Math.sqrt(3) / 2;
     const PADDING = isMobile ? 30 : 50; // 手機版邊距縮小
     const DOT_RADIUS = isMobile ? 5 : 6; // 手機版點半徑
-    const LINE_WIDTH = isMobile ? 3.5 : 4; // 手機版線寬
+    // 【修改】 依照您的需求加粗線條
+    const LINE_WIDTH = isMobile ? 5 : 6; // 手機版線寬 (已加粗)
     const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; // 手機版點擊範圍加大
     const ANGLE_TOLERANCE = 1.5; // 角度容許誤差 (相同)
 
@@ -33,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAYER_COLORS = {
         1: { line: '#3498db', fill: 'rgba(52, 152, 219, 0.3)' },
         2: { line: '#e74c3c', fill: 'rgba(231, 76, 60, 0.3)' },
-        0: { line: '#95a5a6', fill: 'rgba(149, 165, 166, 0.2)' }
+        0: { line: '#95a5a6', fill: 'rgba(149, 165, 166, 0.2)' } // 0 代表無玩家
     };
     const DEFAULT_LINE_COLOR = '#e0e0e0';
 
@@ -94,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 4. 產生所有 "相鄰" 線段 (用於計分和虛線) (相同)
+        // 4. 【修改】 產生所有 "相鄰" 線段 (增加 sharedBy 屬性)
         lines = {};
         for (let r = 0; r < ROW_LENGTHS.length; r++) {
             for (let c = 0; c < ROW_LENGTHS[r]; c++) {
@@ -103,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (c < ROW_LENGTHS[r] - 1) {
                     const d2 = dots[r][c + 1];
                     const id = getLineId(d1, d2);
-                    lines[id] = { p1: d1, p2: d2, drawn: false, player: null, id: id };
+                    lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id };
                 }
                 // 4b. 斜向線 (到 r+1)
                 if (r < ROW_LENGTHS.length - 1) {
@@ -112,27 +113,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (len2 > len1) { // 菱形上半部 (r < 3)
                         const d_dl = dots[r + 1][c];
                         const id_dl = getLineId(d1, d_dl);
-                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: null, id: id_dl };
+                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
                         const d_dr = dots[r + 1][c + 1];
                         const id_dr = getLineId(d1, d_dr);
-                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: null, id: id_dr };
+                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
                     } else { // 菱形下半部 (r >= 3)
                         if (c < len2) { 
                             const d_dl = dots[r + 1][c];
                             const id_dl = getLineId(d1, d_dl);
-                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: null, id: id_dl };
+                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
                         }
                         if (c > 0) { 
                             const d_dr = dots[r + 1][c - 1];
                             const id_dr = getLineId(d1, d_dr);
-                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: null, id: id_dr };
+                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
                         }
                     }
                 }
             }
         }
 
-        // 5. 產生所有三角形 (計分用) (相同)
+        // 5. 【修改】 產生所有三角形 (計分用) (player: 0)
         triangles = [];
         totalTriangles = 0;
         for (let r = 0; r < ROW_LENGTHS.length - 1; r++) {
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         triangles.push({
                             lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
                             dots: [d1, d2, d3],
-                            filled: false, player: null
+                            filled: false, player: 0
                         });
                         totalTriangles++;
                     }
@@ -157,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             triangles.push({
                                 lineKeys: [getLineId(d1, d4), getLineId(d1, d3), getLineId(d4, d3)],
                                 dots: [d1, d4, d3],
-                                filled: false, player: null
+                                filled: false, player: 0
                             });
                             totalTriangles++;
                         }
@@ -172,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         triangles.push({
                             lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
                             dots: [d1, d2, d3],
-                            filled: false, player: null
+                            filled: false, player: 0
                         });
                         totalTriangles++;
                     }
@@ -182,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             triangles.push({
                                 lineKeys: [getLineId(d2, d3), getLineId(d2, d4), getLineId(d3, d4)],
                                 dots: [d2, d3, d4],
-                                filled: false, player: null
+                                filled: false, player: 0
                             });
                             totalTriangles++;
                         }
@@ -195,9 +196,11 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
 
-    // 繪製所有遊戲元素
+    // 【重大修改】 繪製所有遊戲元素 (處理共享線)
     function drawCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 1. 繪製三角形 (相同)
         triangles.forEach(tri => {
             if (tri.filled) {
                 ctx.beginPath();
@@ -210,42 +213,100 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // 2. 【修改】 繪製線條 (區分 普通/共享/預設)
         for (const id in lines) {
             const line = lines[id];
-            ctx.beginPath();
-            ctx.moveTo(line.p1.x, line.p1.y);
-            ctx.lineTo(line.p2.x, line.p2.y);
+            
             if (line.drawn) {
-                ctx.strokeStyle = PLAYER_COLORS[line.player].line;
-                // 【修改】 使用動態 LINE_WIDTH
-                ctx.lineWidth = LINE_WIDTH; 
+                // 【新】 檢查是否為共享線 (sharedBy 不是 0，且不等於原始玩家)
+                if (line.sharedBy !== 0 && line.sharedBy !== line.player) {
+                    // --- 繪製共享線 (兩條並排) ---
+                    
+                    // 計算垂直偏移
+                    const dx = line.p2.x - line.p1.x;
+                    const dy = line.p2.y - line.p1.y;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    const offsetX = -dy / len;
+                    const offsetY = dx / len;
+                    
+                    // 偏移量 (總寬度的 1/3)
+                    const offset = LINE_WIDTH / 3; 
+                    const halfWidth = LINE_WIDTH / 2; // 每條線的寬度
+                    
+                    // 繪製原始玩家的線 (偏移)
+                    ctx.beginPath();
+                    ctx.moveTo(line.p1.x + offsetX * offset, line.p1.y + offsetY * offset);
+                    ctx.lineTo(line.p2.x + offsetX * offset, line.p2.y + offsetY * offset);
+                    ctx.strokeStyle = PLAYER_COLORS[line.player].line;
+                    ctx.lineWidth = halfWidth;
+                    ctx.stroke();
+                    
+                    // 繪製共享玩家的線 (反向偏移)
+                    ctx.beginPath();
+                    ctx.moveTo(line.p1.x - offsetX * offset, line.p1.y - offsetY * offset);
+                    ctx.lineTo(line.p2.x - offsetX * offset, line.p2.y - offsetY * offset);
+                    ctx.strokeStyle = PLAYER_COLORS[line.sharedBy].line;
+                    ctx.lineWidth = halfWidth;
+                    ctx.stroke();
+
+                } else {
+                    // --- 繪製普通單人線 ---
+                    ctx.beginPath();
+                    ctx.moveTo(line.p1.x, line.p1.y);
+                    ctx.lineTo(line.p2.x, line.p2.y);
+                    ctx.strokeStyle = PLAYER_COLORS[line.player].line;
+                    ctx.lineWidth = LINE_WIDTH;
+                    ctx.stroke();
+                }
             } else {
+                // --- 繪製預設的灰色虛線 ---
+                ctx.beginPath();
+                ctx.moveTo(line.p1.x, line.p1.y);
+                ctx.lineTo(line.p2.x, line.p2.y);
                 ctx.strokeStyle = DEFAULT_LINE_COLOR;
-                ctx.lineWidth = 1;
+                ctx.lineWidth = 2; // 預設虛線的寬度
                 ctx.setLineDash([2, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
             }
-            ctx.stroke();
-            ctx.setLineDash([]);
         }
+
+        // 3. 繪製點 (相同)
         dots.forEach(row => {
             row.forEach(dot => {
                 ctx.beginPath();
-                // 【修改】 使用動態 DOT_RADIUS
                 ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI); 
                 ctx.fillStyle = '#34495e';
                 ctx.fill();
             });
         });
-        [selectedDot1, selectedDot2].forEach(dot => {
-            if (dot) {
-                ctx.beginPath();
-                // 【修改】 使用動態 DOT_RADIUS
-                ctx.arc(dot.x, dot.y, DOT_RADIUS + 3, 0, 2 * Math.PI); 
-                ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
-                ctx.lineWidth = 3;
-                ctx.stroke();
-            }
-        });
+
+        // 4. 【修改】 繪製選取的點 和 預覽虛線 (相同)
+        if (selectedDot1) {
+            ctx.beginPath();
+            ctx.arc(selectedDot1.x, selectedDot1.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
+            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.lineWidth = 4; 
+            ctx.stroke();
+        }
+        if (selectedDot2) {
+            ctx.beginPath();
+            ctx.arc(selectedDot2.x, selectedDot2.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
+            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.lineWidth = 4; 
+            ctx.stroke();
+        }
+        
+        if (selectedDot1 && selectedDot2) {
+            ctx.beginPath();
+            ctx.moveTo(selectedDot1.x, selectedDot1.y);
+            ctx.lineTo(selectedDot2.x, selectedDot2.y);
+            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.lineWidth = 4; 
+            ctx.setLineDash([8, 4]); 
+            ctx.stroke();
+            ctx.setLineDash([]); 
+        }
     }
 
     // 點擊/觸控畫布 (相同)
@@ -285,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
 
-    // "確認連線" 按鈕的函式 (相同)
+    // "確認連線" 按鈕的函式 (【邏輯修改】 標記共享線)
     function confirmLine() {
         if (!selectedDot1 || !selectedDot2) return;
         const dotA = selectedDot1;
@@ -308,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 2. 拆解長線為短線並執行 (相同)
+        // 2. 拆解長線為短線 (相同)
         const allDotsOnLine = findIntermediateDots(dotA, dotB);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
@@ -319,15 +380,14 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelLine();
             return;
         }
+
+        // 3. 【修改】 檢查線段是否存在 (邏輯相同)
         let allSegmentsExist = true;
-        let anySegmentDrawn = false;
+        let newSegmentDrawn = false; // 用於追蹤是否畫了 "新" 線
+
         for (const id of segmentIds) {
             if (!lines[id]) {
                 allSegmentsExist = false;
-                break;
-            }
-            if (lines[id].drawn) {
-                anySegmentDrawn = true;
                 break;
             }
         }
@@ -336,16 +396,30 @@ document.addEventListener('DOMContentLoaded', () => {
             cancelLine();
             return;
         }
-        if (anySegmentDrawn) {
-            alert("這條線 (或其中一部分) 已經被畫過了。");
+
+        // 4. 【修改】 遍歷所有線段，畫新線 "或" 標記共享線
+        for (const id of segmentIds) {
+            if (lines[id]) {
+                if (!lines[id].drawn) { 
+                    // --- 這是新線 ---
+                    lines[id].drawn = true;
+                    lines[id].player = currentPlayer; // 記錄 "主要" 玩家
+                    newSegmentDrawn = true; // 標記我們畫了新線
+                } else if (lines[id].player !== 0 && lines[id].player !== currentPlayer) {
+                    // --- 這是重疊線 ---
+                    // 這是由另一位玩家(lines[id].player)畫的線，
+                    // 現在 currentPlayer 正在 "共享" 它
+                    lines[id].sharedBy = currentPlayer;
+                }
+            }
+        }
+
+        // 5. 【修改】 如果沒有畫到任何新線 (表示整條線都畫過了)，才顯示錯誤
+        if (!newSegmentDrawn) {
+            alert("這條線 (或所有部分) 已經被畫過了。");
             cancelLine();
             return;
         }
-        for (const id of segmentIds) {
-            lines[id].drawn = true;
-            lines[id].player = currentPlayer;
-        }
-
 
         // 6. 檢查得分 (相同)
         let totalFilledThisGame = 0;
