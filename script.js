@@ -34,12 +34,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // (新功能) 取得批次對戰元素
     const batchCountInput = document.getElementById('batch-count-input');
     const startBatchButton = document.getElementById('start-batch-button');
+    // **** (新功能) 取得終止按鈕 ****
+    const stopBatchButton = document.getElementById('stop-batch-button');
+    
     const batchStatusMessage = document.getElementById('batch-status-message');
     // (儲存需要被禁用的控制項)
     let uiControls = [
         resetButton, exportLogButton, exportPNGButton, 
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
         startBatchButton, batchCountInput
+        // (*** 故意不包含 stopBatchButton ***)
     ];
 
 
@@ -133,8 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
             // (新) 如果批次對戰中 AI 崩潰，也要解鎖 UI
             if (isBatchRunning) {
-                toggleUIControls(true);
                 isBatchRunning = false;
+                toggleUIControls(true);
+                startBatchButton.classList.remove('hidden');
+                stopBatchButton.classList.add('hidden');
                 batchStatusMessage.textContent = "批次對戰因錯誤已中止。";
             }
         };
@@ -764,6 +770,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 批次執行完畢
                 isBatchRunning = false;
                 toggleUIControls(true); // 解鎖 UI
+                startBatchButton.classList.remove('hidden'); // (新) 恢復按鈕
+                stopBatchButton.classList.add('hidden'); // (新) 隱藏按鈕
                 if (batchStatusMessage) {
                     batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+PNG)。`;
                 }
@@ -986,6 +994,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 鎖定 UI
         toggleUIControls(false);
+        // (新) 切換按鈕
+        startBatchButton.classList.add('hidden');
+        stopBatchButton.classList.remove('hidden');
+        
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
 
         // 強制設定為 CVC 模式 (Value "2")
@@ -995,6 +1007,35 @@ document.addEventListener('DOMContentLoaded', () => {
         initGame();
     }
     
+    // **** (新功能) 終止批次對戰 ****
+    function stopBatchRun() {
+        if (!isBatchRunning) return; // 如果不在執行中，則不動作
+
+        if (confirm("您確定要終止批次對戰嗎？目前已完成的紀錄將會匯出。")) {
+            isBatchRunning = false;
+            
+            // 終止 AI
+            if (isAIThinking) {
+                aiWorker.terminate();
+                isAIThinking = false;
+            }
+
+            // 解鎖 UI
+            toggleUIControls(true);
+            startBatchButton.classList.remove('hidden');
+            stopBatchButton.classList.add('hidden');
+            
+            if (batchStatusMessage) {
+                batchStatusMessage.textContent = `批次已手動終止 (完成 ${batchGamesCompleted} 場)。`;
+            }
+
+            // 匯出目前已有的紀錄
+            if (batchLog.length > 0) {
+                exportBatchLog();
+            }
+        }
+    }
+
     // (新功能) 匯出 *批次* 遊戲紀錄 (多場合併)
     function exportBatchLog() {
         if (!batchLog || batchLog.length === 0) {
@@ -1002,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // CSV 標頭 (**** 新增 Game_ID ****)
+        // CSV 標頭
         const headers = [
             "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
@@ -1011,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let csvContent = "\uFEFF"; // BOM
 
-        // **** 迴圈處理多場遊戲 ****
+        // 迴圈處理多場遊戲
         batchLog.forEach((gameLog, gameIndex) => {
             const gameID = gameIndex + 1;
             
@@ -1031,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
 
                 const row = [
-                    gameID, // (**** 新增 ****)
+                    gameID, 
                     entry.turn,
                     entry.player,
                     escapeCSV(entry.playerType),
@@ -1052,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
                 csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
             }
-            csvContent += "\n"; // (**** 在兩場遊戲間留空行 ****)
+            csvContent += "\n"; 
         });
 
 
@@ -1066,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         // (新檔名)
-        link.setAttribute("download", `triangle_batch_log_${batchTotalGames}_games_${timestamp}.csv`);
+        link.setAttribute("download", `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`);
         
         document.body.appendChild(link); 
         link.click(); 
@@ -1146,7 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
     }
     
-    // (**** 新功能 ****) 匯出棋盤為 PNG (可選傳入 gameID)
+    // (新功能) 匯出棋盤為 PNG (可選傳入 gameID)
     function exportCanvasAsPNG(gameID = null) {
         if (!canvas) {
             alert("找不到畫布！");
@@ -1233,6 +1274,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // (新功能) 綁定批次對戰按鈕
     if (startBatchButton) {
         startBatchButton.addEventListener('click', startBatchRun);
+    }
+    // **** (新功能) 綁定終止按鈕 ****
+    if (stopBatchButton) {
+        stopBatchButton.addEventListener('click', stopBatchRun);
     }
 
     // 啟動遊戲
