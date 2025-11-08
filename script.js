@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // (新功能) 取得批次對戰元素
     const batchCountInput = document.getElementById('batch-count-input');
     const startBatchButton = document.getElementById('start-batch-button');
+    // **** (新功能) 取得終止按鈕 ****
     const stopBatchButton = document.getElementById('stop-batch-button');
     
     const batchStatusMessage = document.getElementById('batch-status-message');
@@ -42,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resetButton, exportLogButton, exportPNGButton, 
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
         startBatchButton, batchCountInput
+        // (*** 故意不包含 stopBatchButton ***)
     ];
 
 
@@ -100,10 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let batchLog = []; // 儲存 (多場) gameHistoryLog
     let batchTotalGames = 0;
     let batchGamesCompleted = 0;
-    
-    // (新功能) 用於儲存 `lines` 的固定順序，確保棋盤快照一致
-    let sortedLineIds = []; 
-    
     // ===================================
     // Web Worker 相關
     // ===================================
@@ -290,11 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        
-        // **** (新功能) 建立固定的 Line ID 列表 ****
-        // 確保每次 `getBoardStateString` 都使用相同的順序
-        sortedLineIds = Object.keys(lines).sort();
-        // **** (新功能) 結束 ****
 
         // 產生所有三角形
         triangles = [];
@@ -813,9 +806,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerAIMove() {
         if (isAIThinking) return; 
         
-        // (新) 批次執行時，如果 isBatchRunning 被設為 false (手動終止)，則停止
-        if (isBatchRunning && !isBatchRunning) return;
-
         const allMoves = findAllValidMoves(lines);
         if (allMoves.length === 0) {
             const playerName = (currentPlayer === 2) ? "AI 2 (Max)" : "AI 1 (Min)";
@@ -848,11 +838,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleAIMoveResult(bestMove) {
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
 
-        // (新) 如果在 AI 思考時，批次被終止了，則丟棄結果
-        if (!isAIThinking && isBatchRunning) {
-            return; 
-        }
-
         if (bestMove && bestMove.dot1 && bestMove.dot2) {
             const dotA = dots[bestMove.dot1.r][bestMove.dot1.c];
             const dotB = dots[bestMove.dot2.r][bestMove.dot2.c];
@@ -881,46 +866,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // **** (新功能) 產生棋盤快照字串 ****
-    /**
-     * @param {object} currentLines - 當前的 lines 物件
-     * @returns {string} 一個代表棋盤狀態的字串
-     * 狀態碼: 0=未畫, 1=P1, 2=P2, 3=P1畫(P2共享), 4=P2畫(P1共享)
-     */
-    function getBoardStateString(currentLines) {
-        // 使用在 initGame 中建立的 sortedLineIds 確保順序一致
-        if (!sortedLineIds || sortedLineIds.length === 0) {
-            console.error("sortedLineIds 尚未初始化！");
-            return "";
-        }
-        
-        const stateChars = sortedLineIds.map(id => {
-            const line = currentLines[id];
-            if (!line || !line.drawn) {
-                return '0'; // 未畫
-            }
-            if (line.player === 1) {
-                return (line.sharedBy === 2) ? '3' : '1';
-            }
-            if (line.player === 2) {
-                return (line.sharedBy === 1) ? '4' : '2';
-            }
-            return '0'; // 預設
-        });
-        
-        return stateChars.join('');
-    }
-
-
     /**
      * 將移動應用於棋盤 (人類和 AI 共用)
-     * (**** 新功能 ****) (此處紀錄 *包含棋盤快照* 的完整日誌)
+     * (此處紀錄完整日誌)
      */
     function applyMoveToBoard(dotA, dotB, player) {
-        
-        // (**** 新功能 ****) 紀錄下棋前的棋盤快照
-        const stateBefore = getBoardStateString(lines);
-
         const allDotsOnLine = findIntermediateDots(dotA, dotB);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
@@ -977,9 +927,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tri.filled) totalFilledThisGame++;
         });
 
-        // (**** 新功能 ****) 紀錄下棋 *後* 的棋盤快照
-        const stateAfter = getBoardStateString(lines);
-
         // 儲存本輪紀錄
         const scoreAfter = scores[player];
         const scoreGained = scoreAfter - scoreBefore;
@@ -1001,9 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreGained: scoreGained,
             trianglesCompleted: completedTrianglesInfo, 
             newScoreP1: scores[1],
-            newScoreP2: scores[2],
-            stateBefore: stateBefore, // (**** 新增 ****)
-            stateAfter: stateAfter   // (**** 新增 ****)
+            newScoreP2: scores[2]
         };
         gameHistoryLog.turns.push(logEntry); // 存入 turns 陣列
         turnCounter++; // 移至下一輪
@@ -1062,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initGame();
     }
     
-    // (新功能) 終止批次對戰
+    // **** (新功能) 終止批次對戰 ****
     function stopBatchRun() {
         if (!isBatchRunning) return; // 如果不在執行中，則不動作
 
@@ -1098,12 +1043,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // CSV 標頭 (**** 新增 BoardState 欄位 ****)
+        // CSV 標頭
         const headers = [
             "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
-            "P1_TotalScore", "P2_TotalScore",
-            "BoardState_Before", "BoardState_After" // (**** 新增 ****)
+            "P1_TotalScore", "P2_TotalScore"
         ];
         
         let csvContent = "\uFEFF"; // BOM
@@ -1137,9 +1081,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     entry.scoreGained,
                     escapeCSV(trianglesStr), 
                     entry.newScoreP1,
-                    entry.newScoreP2,
-                    escapeCSV(entry.stateBefore), // (**** 新增 ****)
-                    escapeCSV(entry.stateAfter)  // (**** 新增 ****)
+                    entry.newScoreP2
                 ];
                 csvContent += row.join(",") + "\n";
             });
@@ -1181,12 +1123,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // CSV 標頭 (**** 新增 BoardState 欄位 ****)
+        // CSV 標頭
         const headers = [
             "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
-            "P1_TotalScore", "P2_TotalScore",
-            "BoardState_Before", "BoardState_After" // (**** 新增 ****)
+            "P1_TotalScore", "P2_TotalScore"
         ];
         
         let csvContent = "\uFEFF"; 
@@ -1215,9 +1156,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 entry.scoreGained,
                 escapeCSV(trianglesStr), 
                 entry.newScoreP1,
-                entry.newScoreP2,
-                escapeCSV(entry.stateBefore), // (**** 新增 ****)
-                escapeCSV(entry.stateAfter)  // (**** 新增 ****)
+                entry.newScoreP2
             ];
             csvContent += row.join(",") + "\n";
         });
@@ -1279,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // (新) 根據是否有 gameID 決定檔名
         if (gameID !== null) {
-            const gameIdStr = String(gameID).padStart(3, '0'); // (新) 改為 3 位數 (001, 002...)
+            const gameIdStr = String(gameID).padStart(2, '0'); // 格式化為 01, 02...
             link.download = `triangle_batch_board_game_${gameIdStr}_${timestamp}.png`;
         } else {
             link.download = `triangle_board_${timestamp}.png`;
@@ -1336,7 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startBatchButton) {
         startBatchButton.addEventListener('click', startBatchRun);
     }
-    // (新功能) 綁定終止按鈕
+    // **** (新功能) 綁定終止按鈕 ****
     if (stopBatchButton) {
         stopBatchButton.addEventListener('click', stopBatchRun);
     }
