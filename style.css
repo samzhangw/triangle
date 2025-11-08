@@ -1,5 +1,5 @@
 /* --- 
-   全新設計 - 現代儀表板風格
+   全新設計 - 現代儀表板風格 (**** 美化升級版 ****)
    --- */
 
 /* --- 1. 變數定義 --- */
@@ -7,7 +7,8 @@
     --font-main: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     
     /* 基礎顏色 */
-    --color-bg: #f8f9fa;        /* 頁面背景 (淺灰) */
+    --color-bg-top: #fdfdff;    /* (新) 漸層背景 - 頂部 */
+    --color-bg-bottom: #f8f9fa; /* (新) 漸層背景 - 底部 */
     --color-surface: #ffffff;   /* 卡片背景 (白) */
     --color-border: #e9ecef;    /* 邊框 (更淺的灰) */
     
@@ -21,17 +22,25 @@
     --p2-color: #e74c3c;
     --p2-bg: #fdf5f4;
 
-    /* 按鈕顏色 */
-    --btn-primary: #3498db;
-    --btn-success: #2ecc71;
-    --btn-danger: #e74c3c;
-    --btn-ai-on: #f39c12;
+    /* (新) 按鈕漸層顏色 */
+    --btn-primary-top: #3ea8f5;
+    --btn-primary-bottom: #3498db;
+    --btn-primary-border: #2980b9;
+    --btn-success-top: #35d882;
+    --btn-success-bottom: #2ecc71;
+    --btn-success-border: #27ae60;
+    --btn-danger-top: #f06151;
+    --btn-danger-bottom: #e74c3c;
+    --btn-danger-border: #c0392b;
 
     /* 陰影 */
     --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
     --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.1);
     --shadow-focus-ring: 0 0 0 3px rgba(52, 152, 219, 0.25);
+    
+    /* (新) 更柔和的卡片陰影 */
+    --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
 }
 
 /* --- 2. 動畫定義 (不變) --- */
@@ -56,7 +65,10 @@
 
 body {
     font-family: var(--font-main);
-    background-color: var(--color-bg);
+    /* (新) 改為漸層背景 */
+    background-color: var(--color-bg-bottom); 
+    background-image: linear-gradient(170deg, var(--color-bg-top) 0%, var(--color-bg-bottom) 100%);
+    
     color: var(--color-text-primary);
     display: flex;
     flex-direction: column;
@@ -74,15 +86,18 @@ h1 {
     color: var(--color-text-primary);
     text-align: center;
     margin-bottom: 0.5rem;
+    /* (新) 增加 subtle text shadow */
+    text-shadow: 0 2px 4px rgba(0,0,0,0.03);
 }
 
 .subtitle {
-    font-size: 1.1rem;
+    font-size: 1.2rem; /* (新) 稍稍放大 */
     font-weight: 400;
     color: var(--color-text-secondary);
     text-align: center;
     margin-top: 0;
     margin-bottom: 2rem;
+    letter-spacing: 0.5px; /* (新) 增加字距 */
 }
 
 /* --- 4. 主要版面配置 --- */
@@ -97,8 +112,11 @@ h1 {
     background-color: var(--color-surface);
     padding: 30px;
     border-radius: 20px;
-    box-shadow: var(--shadow-soft);
-    border: 1px solid var(--color-border);
+    
+    /* (新) 移除邊框，使用更柔和的陰影 */
+    box-shadow: var(--shadow-card);
+    border: none;
+    
     animation: fadeIn 0.6s ease-out;
 }
 
@@ -132,9 +150,10 @@ h1 {
     font-weight: 700;
     padding: 16px;
     border-radius: 12px;
-    background-color: var(--color-bg); 
+    /* (新) 改為白色背景 + 邊框，使其與卡片一致 */
+    background-color: var(--color-surface);
     color: var(--color-text-secondary);
-    border: none; 
+    border: 1px solid var(--color-border); 
     text-align: center;
     transition: all 0.2s ease;
 }
@@ -144,12 +163,14 @@ h1 {
     color: var(--p1-color);
     transform: scale(1.03);
     box-shadow: 0 4px 10px rgba(52, 152, 219, 0.2);
+    border-color: transparent; /* (新) 啟用時移除邊框 */
 }
 
 .score-box.player2.active {
     background-color: var(--p2-bg);
     color: var(--p2-color);
     box-shadow: 0 4px 10px rgba(231, 76, 60, 0.2);
+    border-color: transparent; /* (新) 啟用時移除邊框 */
 }
 
 .score-box.score-pulse {
@@ -171,7 +192,8 @@ h1 {
 
 /* 5c. 畫布 */
 canvas {
-    background-color: var(--color-surface);
+    /* (新) 增加微妙的背景漸層，使其與 UI 區分 */
+    background-image: radial-gradient(circle, #ffffff 0%, #fdfdff 90%, #f8f9fa 100%);
     border-radius: 16px;
     box-shadow: var(--shadow-soft);
     border: 1px solid var(--color-border);
@@ -213,7 +235,6 @@ canvas:hover {
     gap: 15px;
     width: 100%;
     
-    /* (新) 增加頂部邊框，與批次控制器分隔 */
     margin-top: 10px;
     padding-top: 20px;
     border-top: 1px solid var(--color-border);
@@ -245,7 +266,6 @@ canvas:hover {
 }
 .batch-input-group {
     display: grid;
-    /* (新) 改為 1fr auto auto，以容納終止按鈕 */
     grid-template-columns: 1fr auto auto; 
     gap: 10px;
 }
@@ -263,8 +283,9 @@ canvas:hover {
     width: 100%;
     padding: 12px 15px;
     border-radius: 10px;
-    border: 1px solid var(--color-border);
-    background-color: var(--color-bg); 
+    /* (新) 改為白色背景 + 較粗邊框 */
+    border: 2px solid var(--color-border);
+    background-color: var(--color-surface); 
     box-shadow: none;
     font-family: var(--font-main);
     font-size: 1rem;
@@ -279,6 +300,7 @@ canvas:hover {
     background-position: right 12px center;
     background-size: 1.2em;
     cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .control-select:focus {
     outline: none;
@@ -288,32 +310,37 @@ canvas:hover {
 
 /* (新) 批次對戰輸入框 (繼承 .control-select) */
 #batch-count-input {
-    padding: 12px 15px; /* 確保 padding 一致 */
+    padding: 12px 15px; 
 }
 
 
-/* 6d. 按鈕 */
+/* 6d. 按鈕 (**** 新功能 ****) 3D 按鈕 */
 .btn {
     font-family: var(--font-main);
     font-size: 1rem;
     font-weight: 700;
     padding: 14px 20px;
-    border: none;
+    border: none; /* (新) 移除頂部邊框 */
     border-radius: 10px;
     cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    transition: all 0.15s ease;
+    transition: all 0.2s ease-out; /* (新) 調整 transition */
     color: white;
     width: 100%;
+    
+    /* (新) 增加 3D 效果 */
+    border-bottom: 3px solid rgba(0, 0, 0, 0.2);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .btn:hover {
     transform: translateY(-2px);
     filter: brightness(1.05);
-    box-shadow: var(--shadow-soft);
+    box-shadow: var(--shadow-md); /* (新) 增強陰影 */
 }
 .btn:active {
-    transform: scale(0.98);
+    transform: translateY(1px); /* (新) 按下效果 */
     filter: brightness(0.95);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); /* (新) 內陰影 */
+    border-bottom-width: 1px; /* (新) 減少底部邊框 */
 }
 .btn:focus-visible {
     outline: none;
@@ -325,22 +352,34 @@ canvas:hover {
 .control-select:disabled {
     cursor: not-allowed;
     background-color: var(--color-border);
+    background-image: none; /* (新) 移除漸層 */
     color: var(--color-text-secondary);
     opacity: 0.7;
     transform: none;
     box-shadow: none;
+    border-bottom: 3px solid rgba(0, 0, 0, 0.1); /* (新) 保持禁用時的邊框 */
 }
 /* 覆蓋 .btn.success:disabled */
 .btn.success:disabled,
 .btn.primary:disabled,
 .btn.danger:disabled {
     background-color: var(--color-border);
+    background-image: none;
 }
 
-
-.btn.primary { background-color: var(--btn-primary); }
-.btn.success { background-color: var(--btn-success); }
-.btn.danger  { background-color: var(--btn-danger); }
+/* (新) 套用漸層和邊框顏色 */
+.btn.primary { 
+    background-image: linear-gradient(to bottom, var(--btn-primary-top), var(--btn-primary-bottom));
+    border-bottom-color: var(--btn-primary-border);
+}
+.btn.success { 
+    background-image: linear-gradient(to bottom, var(--btn-success-top), var(--btn-success-bottom));
+    border-bottom-color: var(--btn-success-border);
+}
+.btn.danger  { 
+    background-image: linear-gradient(to bottom, var(--btn-danger-top), var(--btn-danger-bottom));
+    border-bottom-color: var(--btn-danger-border);
+}
 
 
 /* --- 7. 遊戲結束 Modal --- */
