@@ -7,7 +7,7 @@
  * 3. 置換表 (Transposition Table)
  * 4. 啟發式評估 (Heuristic)
  * 5. 靜態搜尋 (Quiescence Search)
- * 6. (**** 新功能 ****) 增加隨機性以打破平手
+ * 6. (**** 速度優化 ****) 恢復為平衡的搜尋深度
  * ============================================
  */
 
@@ -17,7 +17,8 @@ let dots = [];
 let totalTriangles = 0;
 let REQUIRED_LINE_LENGTH = 1;
 
-const QUIESCENCE_MAX_DEPTH = 4; 
+// (**** 速度優化 ****) 恢復為 3，加快葉節點計算
+const QUIESCENCE_MAX_DEPTH = 3; // (原為 4)
 
 // --- 2. 訊息處理 ---
 
@@ -33,7 +34,7 @@ self.onmessage = (e) => {
 
         // 清空置換表
         transpositionTable.clear();
-        logToMain(`--- [Worker] 置換表已清除 (模式: 終極深度 + 隨機性) ---`);
+        logToMain(`--- [Worker] 置換表已清除 (模式: 速度平衡版) ---`);
 
         // 開始運算
         const bestMove = findBestAIMove(
@@ -425,7 +426,7 @@ function quiescenceSearch(currentLines, currentTriangles, depth, isMaximizingPla
 
 
 /**
- * Minimax 演算法核心 (**** BugFix ****)
+ * Minimax 演算法核心 (**** 導入靜態搜尋 ****)
  */
 const TT_FLAG_EXACT = 0;
 const TT_FLAG_LOWERBOUND = 1; // Alpha
@@ -474,6 +475,7 @@ function minimax(currentLines, currentTriangles, depth, isMaximizingPlayer, alph
             const immediateScore = sim.scoreGained * 1000;
             
             // (**** BugFix 後的正確邏輯 ****)
+            // 正常的 minimax 搜尋 *總是* 假設換人，深度-1。
             const futureValue = minimax(sim.newLines, sim.newTriangles, depth - 1, false, alpha, beta);
             const totalValue = immediateScore + futureValue; 
 
@@ -515,16 +517,16 @@ function minimax(currentLines, currentTriangles, depth, isMaximizingPlayer, alph
 }
 
 /**
- * (**** 智能提升版 ****) 動態搜尋深度
+ * (**** 速度優化 ****) 動態搜尋深度
  */
 function getAIDepth() {
-    // (註：所有深度 +1)
+    // (註：恢復為速度/智能的平衡點)
     switch (REQUIRED_LINE_LENGTH) {
-        case 1: return 6; // (原 5)
-        case 2: return 7; // (原 6)
-        case 3: return 8; // (原 7)
-        case 4: case 5: return 9; // (原 8)
-        default: return 7; // (原 6)
+        case 1: return 5; // (原 6)
+        case 2: return 6; // (原 7)
+        case 3: return 7; // (原 8)
+        case 4: case 5: return 8; // (原 9)
+        default: return 6; // (原 7)
     }
 }
 
@@ -560,15 +562,12 @@ function findBestAIMove(currentLines, currentTriangles, player) {
     });
 
     // (**** 新功能 ****) 增加隨機性來打破平手
-    // 1. 根據玩家是 Max 還是 Min 來決定主要排序方向
-    // 2. 如果分數 (value) 相同，則使用 Math.random() 來隨機排序
     scoredMoves.sort((a, b) => {
         if (a.value === b.value) {
             return Math.random() - 0.5; // <--- 隨機打破平手
         }
         return isMaximizingPlayer ? b.value - a.value : a.value - b.value;
     });
-    // (**** 新功能) 結束 ****
     
     // 迭代加深 (Iterative Deepening)
     let bestMove = null;
@@ -585,17 +584,12 @@ function findBestAIMove(currentLines, currentTriangles, player) {
         const movesToSearch = Array.from(scoredMoves);
         if (bestMove) {
             movesToSearch.sort((a, b) => {
-                // (比較 move 物件需要更精確的比對)
                 const moveAId = getLineId(a.move.dot1, a.move.dot2);
                 const moveBId = getLineId(b.move.dot1, b.move.dot2);
                 const bestMoveId = getLineId(bestMove.dot1, bestMove.dot2);
                 
                 if (moveAId === bestMoveId) return -1;
                 if (moveBId === bestMoveId) return 1;
-                
-                // (**** 新功能 ****)
-                // 如果 A, B 都不是上一輪的最佳解，
-                // 則保持我們在 sort() 中已經設定好的 (隨機化的) 順序
                 return 0; 
             });
         }
