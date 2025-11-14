@@ -650,7 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // (僅在非批次模式下觸發，因為批次模式沒有人類玩家)
         if (!isBatchRunning) {
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
-            exportCanvasAsPNG(null, turnID); // gameID 為 null 表示非批次
+            // [修改] 傳入 moveResult.segmentIds
+            exportCanvasAsPNG(null, turnID, moveResult.segmentIds); 
         }
         // **** (修改) 結束 ****
         
@@ -980,7 +981,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // **** (修改) 儲存 AI 每一步的 PNG (所有模式都暫存) ****
             const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
-            exportCanvasAsPNG(gameID, turnID);
+            // [修改] 傳入 moveResult.segmentIds
+            exportCanvasAsPNG(gameID, turnID, moveResult.segmentIds);
             // **** (修改) 結束 ****
 
             updateUI(); 
@@ -1124,7 +1126,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             newSegmentDrawn: true,
             gameEnded: (totalFilledThisGame === totalTriangles),
-            scoreGained: scoreGained 
+            scoreGained: scoreGained,
+            segmentIds: segmentIds // <-- [修改] 回傳畫下的線段 ID
         };
     }
     
@@ -1389,7 +1392,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
     // **** (修改) 匯出棋盤為 PNG (主要邏輯) ****
-    function exportCanvasAsPNG(gameID = null, turnID = null) {
+    function exportCanvasAsPNG(gameID = null, turnID = null, highlightSegmentIds = null) { // <-- [修改] 增加第 3 個參數
         if (!canvas) {
             alert("找不到畫布！");
             return;
@@ -1404,7 +1407,34 @@ document.addEventListener('DOMContentLoaded', () => {
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         tempCtx.drawImage(canvas, 0, 0);
 
-        // 2. 產生檔案名稱
+        // 2. (**** 新功能 ****) 繪製高亮的線條
+        if (highlightSegmentIds && highlightSegmentIds.length > 0) {
+            // 定義高亮樣式
+            const HIGHLIGHT_COLOR = '#FFFF00'; // 亮黃色
+            const HIGHLIGHT_LINE_WIDTH = LINE_WIDTH + 4; // 讓線條更粗
+            const HIGHLIGHT_OPACITY = 0.8; // 80% 透明度
+
+            tempCtx.save(); // 保存當前狀態
+            tempCtx.globalAlpha = HIGHLIGHT_OPACITY;
+            tempCtx.strokeStyle = HIGHLIGHT_COLOR;
+            tempCtx.lineWidth = HIGHLIGHT_LINE_WIDTH;
+            tempCtx.lineCap = 'round'; // 讓線條結尾圓滑
+
+            for (const id of highlightSegmentIds) {
+                // 從主遊戲狀態的 lines 物件中取得座標
+                const line = lines[id]; 
+                if (line) {
+                    tempCtx.beginPath();
+                    tempCtx.moveTo(line.p1.x, line.p1.y);
+                    tempCtx.lineTo(line.p2.x, line.p2.y);
+                    tempCtx.stroke();
+                }
+            }
+            
+            tempCtx.restore(); // 恢復 globalAlpha 和其他狀態
+        }
+
+        // 3. 產生檔案名稱 (原來的步驟 2)
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         let filename = "";
