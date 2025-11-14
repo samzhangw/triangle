@@ -60,7 +60,8 @@
                 <div class="control-group">
                     <label for="board-size-select" class="control-label">棋盤大小</label>
                     <select id="board-size-select" class="control-select">
-                        <option value="tiny">最小</option> <option value="small">小</option>
+                        <option value="tiny">最小</option>
+                        <option value="small">小</option>
                         <option value="medium" selected>中</option>
                         <option value="large">大</option>
                     </select>
@@ -81,7 +82,21 @@
                         <option value="2">電腦 V.S. 電腦</option>
                     </select>
                 </div>
-
+                
+                <div class="control-group hidden" id="ai-p1-type-group">
+                    <label for="ai-p1-type-select" class="control-label">AI (P1) 類型</label>
+                    <select id="ai-p1-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="greedy">Greedy (貪婪)</option>
+                    </select>
+                </div>
+                <div class="control-group hidden" id="ai-p2-type-group">
+                    <label for="ai-p2-type-select" class="control-label">AI (P2) 類型</label>
+                    <select id="ai-p2-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="greedy">Greedy (貪婪)</option>
+                    </select>
+                </div>
                 <div class="control-group">
                     <label for="input-mode-select" class="control-label">操作模式</label>
                     <select id="input-mode-select" class="control-select">
