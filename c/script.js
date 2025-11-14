@@ -269,7 +269,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 dots[r][c] = {
                     x: c * DOT_SPACING_X + offsetX,
                     y: r * DOT_SPACING_Y + PADDING,
-                    r: r, c: c
+                    r: r, c: c,
+                    id: `${r},${c}`, // **** (新功能) 加入 ID ****
+                    number: 0       // **** (新功能) 加入數字 (0=未填) ****
                 };
             }
         });
@@ -372,6 +374,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // **** (新功能) 執行 1-2-3 數字解謎 ****
+        initializeNumberPuzzle();
+        
         updateUI();
         drawCanvas();
         
@@ -396,6 +401,117 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+
+    // ==========================================================
+    // **** (新功能) 1-2-3 數字謎題演算法 ****
+    // ==========================================================
+    
+    // (全域變數，用於儲存點與三角形的快速對應)
+    let dotToTrianglesMap = new Map();
+
+    /**
+     * 初始化數字謎題
+     */
+    function initializeNumberPuzzle() {
+        console.log("開始解 1-2-3 數字謎題...");
+        dotToTrianglesMap.clear();
+        const allDots = dots.flat();
+        
+        // 1. 為所有點建立空的 Map 條目
+        for (const dot of allDots) {
+            dotToTrianglesMap.set(dot.id, []);
+        }
+        
+        // 2. 遍歷所有三角形，將它們加入到對應點的 Map 中
+        for (const tri of triangles) {
+            for (const dot of tri.dots) {
+                dotToTrianglesMap.get(dot.id).push(tri);
+            }
+        }
+
+        // 3. 找到中心點並設定為 3
+        const centerRowIndex = Math.floor(dots.length / 2);
+        const centerColIndex = Math.floor(dots[centerRowIndex].length / 2);
+        const centerDot = dots[centerRowIndex][centerColIndex];
+        centerDot.number = 3;
+
+        // 4. 開始遞迴解謎
+        const success = solveNumberPuzzle(0, allDots);
+        
+        if (success) {
+            console.log("數字謎題解答成功！");
+        } else {
+            console.warn("此棋盤大小的數字謎題無解 (或中心點 3 導致無解)。");
+            // (重設回 0，僅保留中心點的 3)
+            allDots.forEach(d => { if (d !== centerDot) d.number = 0; });
+        }
+    }
+
+    /**
+     * 檢查在某個點填入某個數字是否有效
+     */
+    function checkNumberValidity(dot, num) {
+        const trianglesForThisDot = dotToTrianglesMap.get(dot.id);
+        
+        for (const tri of trianglesForThisDot) {
+            const otherDots = tri.dots.filter(d => d.id !== dot.id);
+            const num1 = otherDots[0].number;
+            const num2 = otherDots[1].number;
+
+            // 規則 1: 同一個三角形內不能有重複數字
+            if ((num1 !== 0 && num1 === num) || (num2 !== 0 && num2 === num)) {
+                return false;
+            }
+            
+            // 規則 2: 如果另兩個點已填，三數相加必須為 6 (1+2+3)
+            if (num1 !== 0 && num2 !== 0) {
+                if (num + num1 + num2 !== 6) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 回溯演算法 (Backtracking Solver)
+     */
+    function solveNumberPuzzle(dotIndex, allDots) {
+        // 終止條件：所有點都檢查完畢
+        if (dotIndex === allDots.length) {
+            return true; // 找到解
+        }
+
+        const dot = allDots[dotIndex];
+
+        // 如果這個點已經有數字 (例如中心點)，跳到下一個點
+        if (dot.number !== 0) {
+            return solveNumberPuzzle(dotIndex + 1, allDots);
+        }
+
+        // 嘗試填入 1, 2, 3
+        for (let num = 1; num <= 3; num++) {
+            if (checkNumberValidity(dot, num)) {
+                dot.number = num; // 填入
+                
+                // 遞迴
+                if (solveNumberPuzzle(dotIndex + 1, allDots)) {
+                    return true;
+                }
+                
+                // 回溯
+                dot.number = 0; 
+            }
+        }
+
+        // 如果 1, 2, 3 都不能填，表示此路徑無解
+        return false;
+    }
+
+    // ==========================================================
+    // (結束 數字謎題演算法)
+    // ==========================================================
+
 
     // 繪製所有遊戲元素
     function drawCanvas() {
@@ -464,9 +580,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 3. 繪製點
+        // 3. 繪製點 (**** 修改 ****)
         dots.forEach(row => {
             row.forEach(dot => {
+                
+                // **** (新功能) 繪製數字 (在點的上方) ****
+                if (dot.number > 0) {
+                    ctx.fillStyle = '#2c3e50'; // 主要文字顏色
+                    ctx.font = `bold ${isMobile ? 10 : 12}px "Nunito", sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom'; // 文字底部對齊
+                    ctx.fillText(dot.number, dot.x, dot.y - DOT_RADIUS - (isMobile ? 1 : 2)); // 畫在點上方
+                }
+
+                // 繪製點 (圓圈)
                 ctx.beginPath();
                 ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI); 
                 ctx.fillStyle = '#34495e';
@@ -650,8 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // (僅在非批次模式下觸發，因為批次模式沒有人類玩家)
         if (!isBatchRunning) {
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
-            // [修改] 傳入 moveResult.segmentIds
-            exportCanvasAsPNG(null, turnID, moveResult.segmentIds); 
+            exportCanvasAsPNG(null, turnID); // gameID 為 null 表示非批次
         }
         // **** (修改) 結束 ****
         
@@ -981,8 +1107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // **** (修改) 儲存 AI 每一步的 PNG (所有模式都暫存) ****
             const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
-            // [修改] 傳入 moveResult.segmentIds
-            exportCanvasAsPNG(gameID, turnID, moveResult.segmentIds);
+            exportCanvasAsPNG(gameID, turnID);
             // **** (修改) 結束 ****
 
             updateUI(); 
@@ -1126,8 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             newSegmentDrawn: true,
             gameEnded: (totalFilledThisGame === totalTriangles),
-            scoreGained: scoreGained,
-            segmentIds: segmentIds // <-- [修改] 回傳畫下的線段 ID
+            scoreGained: scoreGained 
         };
     }
     
@@ -1392,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
     // **** (修改) 匯出棋盤為 PNG (主要邏輯) ****
-    function exportCanvasAsPNG(gameID = null, turnID = null, highlightSegmentIds = null) { // <-- [修改] 增加第 3 個參數
+    function exportCanvasAsPNG(gameID = null, turnID = null) {
         if (!canvas) {
             alert("找不到畫布！");
             return;
@@ -1407,34 +1531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         tempCtx.drawImage(canvas, 0, 0);
 
-        // 2. (**** 新功能 ****) 繪製高亮的線條
-        if (highlightSegmentIds && highlightSegmentIds.length > 0) {
-            // 定義高亮樣式
-            const HIGHLIGHT_COLOR = '#FFFF00'; // 亮黃色
-            const HIGHLIGHT_LINE_WIDTH = LINE_WIDTH + 4; // 讓線條更粗
-            const HIGHLIGHT_OPACITY = 0.8; // 80% 透明度
-
-            tempCtx.save(); // 保存當前狀態
-            tempCtx.globalAlpha = HIGHLIGHT_OPACITY;
-            tempCtx.strokeStyle = HIGHLIGHT_COLOR;
-            tempCtx.lineWidth = HIGHLIGHT_LINE_WIDTH;
-            tempCtx.lineCap = 'round'; // 讓線條結尾圓滑
-
-            for (const id of highlightSegmentIds) {
-                // 從主遊戲狀態的 lines 物件中取得座標
-                const line = lines[id]; 
-                if (line) {
-                    tempCtx.beginPath();
-                    tempCtx.moveTo(line.p1.x, line.p1.y);
-                    tempCtx.lineTo(line.p2.x, line.p2.y);
-                    tempCtx.stroke();
-                }
-            }
-            
-            tempCtx.restore(); // 恢復 globalAlpha 和其他狀態
-        }
-
-        // 3. 產生檔案名稱 (原來的步驟 2)
+        // 2. 產生檔案名稱
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         let filename = "";
