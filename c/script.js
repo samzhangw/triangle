@@ -282,7 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (c < ROW_LENGTHS[r] - 1) {
                     const d2 = dots[r][c + 1];
                     const id = getLineId(d1, d2);
-                    lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id };
+                    // [修改] 新增 turnDrawn: null
+                    lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id, turnDrawn: null };
                 }
                 if (r < ROW_LENGTHS.length - 1) {
                     const len1 = ROW_LENGTHS[r];
@@ -290,20 +291,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (len2 > len1) { 
                         const d_dl = dots[r + 1][c];
                         const id_dl = getLineId(d1, d_dl);
-                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+                        // [修改] 新增 turnDrawn: null
+                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl, turnDrawn: null };
                         const d_dr = dots[r + 1][c + 1];
                         const id_dr = getLineId(d1, d_dr);
-                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                        // [修改] 新增 turnDrawn: null
+                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr, turnDrawn: null };
                     } else { 
                         if (c < len2) { 
                             const d_dl = dots[r + 1][c];
                             const id_dl = getLineId(d1, d_dl);
-                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+                            // [修改] 新增 turnDrawn: null
+                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl, turnDrawn: null };
                         }
                         if (c > 0) { 
                             const d_dr = dots[r + 1][c - 1];
                             const id_dr = getLineId(d1, d_dr);
-                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                            // [修改] 新增 turnDrawn: null
+                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr, turnDrawn: null };
                         }
                     }
                 }
@@ -461,6 +466,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.setLineDash([2, 4]);
                 ctx.stroke();
                 ctx.setLineDash([]);
+            }
+        }
+
+        // (**** 新功能 ****) 2b. 繪製線條上的步數數字
+        ctx.font = isMobile ? "bold 11px Arial" : "bold 14px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        for (const id in lines) {
+            const line = lines[id];
+            // 檢查線條是否已繪製，且 turnDrawn 不是 null 或 0
+            if (line.drawn && line.turnDrawn) { 
+                const midX = (line.p1.x + line.p2.x) / 2;
+                const midY = (line.p1.y + line.p2.y) / 2;
+                const text = line.turnDrawn.toString();
+
+                // 繪製白色 "光暈" (外框) - 確保在彩色線條上能看清楚
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3; // 光暈寬度
+                ctx.strokeText(text, midX, midY);
+                
+                // 繪製深色文字 (使用與點相同的顏色)
+                ctx.fillStyle = '#34495e'; 
+                ctx.fillText(text, midX, midY);
             }
         }
 
@@ -1054,6 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!lines[id].drawn) { 
                     lines[id].drawn = true;
                     lines[id].player = player;
+                    lines[id].turnDrawn = turnCounter; // <-- [修改] 紀錄步數
                     newSegmentDrawn = true;
                 } else if (lines[id].player !== 0 && lines[id].player !== player) {
                     if (lines[id].sharedBy === 0) {
