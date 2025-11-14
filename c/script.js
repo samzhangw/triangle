@@ -67,6 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 依棋盤大小產生 ROW_LENGTHS
     function computeRowLengths(size) {
         switch (size) {
+            case 'tiny': // (新加入)
+                return [2, 3, 2];
             case 'small':
                 return [3, 4, 5, 4, 3];
             case 'large':
