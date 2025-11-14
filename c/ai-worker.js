@@ -8,6 +8,7 @@
  * 4. (**** 新功能 ****) 根據規則切換策略的 啟發式評估 (Heuristic)
  * 5. 靜態搜尋 (Quiescence Search)
  * 6. (**** 新功能 ****) 支援「得分後再走一步」的 Minimax
+ * 7. (**** 新功能 ****) 貪婪演算法 (Greedy Algorithm)
  * ============================================
  */
 
@@ -29,24 +30,42 @@ self.onmessage = (e) => {
     const data = e.data;
 
     if (data.command === 'start') {
+        // (**** 新功能 ****) 讀取 AI 類型
+        const aiType = data.aiType || 'minimax';
+        const player = data.gameState.player;
+        
         // 更新遊戲狀態
         dots = data.gameState.dots;
         totalTriangles = data.gameState.totalTriangles;
         REQUIRED_LINE_LENGTH = data.gameState.requiredLineLength;
-        
-        // **** (新功能) 讀取規則 ****
         isScoreAndGoAgain = data.gameState.isScoreAndGoAgain; 
+        
+        const playerName = (player === 2) ? "AI 2 (Max)" : "AI 1 (Min)";
 
-        // 清空置換表
-        transpositionTable.clear();
-        logToMain(`--- [Worker] 置換表已清除 (得分後再走: ${isScoreAndGoAgain}) ---`);
-
-        // 開始運算
-        const bestMove = findBestAIMove(
-            data.gameState.lines, 
-            data.gameState.triangles, 
-            data.gameState.player
-        );
+        // (**** 新功能 ****) 根據 AI 類型決定呼叫哪個函式
+        let bestMove;
+        
+        if (aiType === 'greedy') {
+            logToMain(`--- [Worker] ${playerName} 開始思考 (貪婪法) ---`);
+            // 清除置換表 (雖然貪婪法不用，但保持乾淨)
+            transpositionTable.clear();
+            bestMove = findBestGreedyMove(
+                data.gameState.lines, 
+                data.gameState.triangles, 
+                player,
+                playerName
+            );
+            
+        } else { // 預設為 'minimax'
+            logToMain(`--- [Worker] 置換表已清除 (得分後再走: ${isScoreAndGoAgain}) ---`);
+            // 清空置換表 (Minimax 需要)
+            transpositionTable.clear();
+            bestMove = findBestAIMove(
+                data.gameState.lines, 
+                data.gameState.triangles, 
+                player
+            );
+        }
         
         // 運算完成後，將結果傳回主線程
         self.postMessage({
@@ -74,6 +93,7 @@ function postIntermediateResult(move, depth, score) {
 }
 
 // --- 3. 遊戲邏輯輔助函式 (從 script.js 搬移) ---
+// (*** 此區域函式 (getLineId, isClose, findIntermediateDots, isValidPreviewLine, deepCopy) 保持不變 ***)
 
 function getLineId(dot1, dot2) {
     if (!dot1 || !dot2) return null;
@@ -366,6 +386,54 @@ function findAllScoringMoves(currentLines, currentTriangles, player) {
     return scoringMoves;
 }
 
+// ==========================================================
+// (**** 新功能 ****) 貪婪演算法 (Greedy Algorithm)
+// ==========================================================
+
+function findBestGreedyMove(currentLines, currentTriangles, player, playerName) {
+    const allMoves = findAllValidMoves(currentLines);
+    if (allMoves.length === 0) {
+        logToMain(`--- ${playerName} (貪婪) 找不到可走的步 ---`);
+        return null; 
+    }
+
+    let bestScoringMoves = [];
+    let maxScore = 0; // 尋找 > 0 的分數
+
+    // 1. 遍歷所有走法，找出得分最高的走法
+    for (const move of allMoves) {
+        const sim = simulateMove(move, currentLines, currentTriangles, player);
+        if (!sim) continue;
+        
+        if (sim.scoreGained > maxScore) {
+            // 找到一個更好的得分
+            maxScore = sim.scoreGained;
+            bestScoringMoves = [move]; // 重設最佳列表
+        } else if (sim.scoreGained === maxScore && maxScore > 0) {
+            // 找到一個同分的走法 (且必須是 > 0)
+            bestScoringMoves.push(move);
+        }
+    }
+
+    // 2. 決定要回傳哪個
+    if (bestScoringMoves.length > 0) {
+        // 情況 1: 找到了至少一個得分 > 0 的走法
+        logToMain(`--- ${playerName} (貪婪) 找到 ${bestScoringMoves.length} 個得分 ${maxScore} 的走法，隨機選 1 ---`);
+        // 從中隨機選一個
+        return bestScoringMoves[Math.floor(Math.random() * bestScoringMoves.length)];
+    } else {
+        // 情況 2: 沒有任何走法能得分 (maxScore 仍然是 0)
+        logToMain(`--- ${playerName} (貪婪) 找不到得分走法，從 ${allMoves.length} 個走法中隨機選 1 ---`);
+        // 從所有走法中隨機選一個
+        return allMoves[Math.floor(Math.random() * allMoves.length)];
+    }
+}
+
+
+// ==========================================================
+// (**** 以下是 Minimax 演算法 ****)
+// ==========================================================
+
 
 /**
  * 靜態搜尋 (Quiescence Search)
@@ -574,7 +642,7 @@ function getAIDepth() {
 }
 
 /**
- * AI "大腦" (整合迭代加深)
+ * AI "大腦" (整合迭代加深) - (Minimax 專用)
  */
 function findBestAIMove(currentLines, currentTriangles, player) {
     const isMaximizingPlayer = (player === 2);
