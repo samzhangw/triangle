@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameHistoryLog = {};
     let turnCounter = 1;
     
-    // **** (新功能) 用於暫存 PNG 步驟 ****
+    // **** (新功能) 用於暫存 PNG 步驟 (批次或單場) ****
     let pngStepLog = []; 
 
     // 批次對戰狀態
@@ -203,11 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!isBatchRunning) {
             batchLog = [];
+            // **** (修改) 僅在非批次模式下，才在遊戲開始時清空 PNG 暫存 ****
+            pngStepLog = [];
         }
         
-        // **** (新功能) 清空 PNG 暫存陣列 ****
-        pngStepLog = [];
-
         isScoreAndGoAgain = scoreAndGoCheckbox.checked;
         
         inputMode = inputModeSelect.value;
@@ -647,7 +646,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         drawCanvas();
 
-        // **** (修改) 儲存人類玩家的 PNG 步驟 ****
+        // **** (修改) 儲存人類玩家的 PNG 步驟 (一律暫存) ****
+        // (僅在非批次模式下觸發，因為批次模式沒有人類玩家)
         if (!isBatchRunning) {
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
             exportCanvasAsPNG(null, turnID); // gameID 為 null 表示非批次
@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isBatchRunning) {
             
-            // 批次模式：匯出最終畫面的 PNG
+            // 批次模式：匯出最終畫面的 PNG (這將被暫存)
             exportCanvasAsPNG(batchGamesCompleted + 1, null); 
             
             batchLog.push(gameHistoryLog); 
@@ -886,22 +886,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (batchGamesCompleted < batchTotalGames) {
                 setTimeout(initGame, 10); 
             } else {
+                // **** 批次對戰*全部*結束 ****
                 isBatchRunning = false;
                 toggleUIControls(true); 
                 startBatchButton.classList.remove('hidden'); 
                 stopBatchButton.classList.add('hidden'); 
                 if (batchStatusMessage) {
-                    batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+PNG)。`;
+                    batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+ZIP)。`;
                 }
+                // 批次結束後，同時匯出 CSV 和 ZIP
                 exportBatchLog(); 
             }
 
         } else {
-            // **** (新功能) 非批次模式：匯出 ZIP 檔案 ****
+            // **** 非批次模式結束 ****
             if (pngStepLog.length > 0) {
-                createAndDownloadZip();
+                createAndDownloadZip(); // 傳遞 null 將使用預設檔名
             }
-            // **** (新功能) 結束 ****
             
             if (winnerText) {
                 winnerText.textContent = winnerMessage;
@@ -976,7 +977,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             drawCanvas();
 
-            // **** (修改) 儲存 AI 每一步的 PNG (所有模式) ****
+            // **** (修改) 儲存 AI 每一步的 PNG (所有模式都暫存) ****
             const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
             const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
             exportCanvasAsPNG(gameID, turnID);
@@ -1156,7 +1157,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         isBatchRunning = true;
+        
+        // **** (修改) 批次開始時，清空 PNG 和 CSV 的日誌 ****
+        pngStepLog = [];
         batchLog = [];
+        
         batchTotalGames = gameCount;
         batchGamesCompleted = 0;
 
@@ -1190,76 +1195,86 @@ document.addEventListener('DOMContentLoaded', () => {
                 batchStatusMessage.textContent = `批次已手動終止 (完成 ${batchGamesCompleted} 場)。`;
             }
 
-            if (batchLog.length > 0) {
-                exportBatchLog();
-            }
+            // **** (修改) 終止時，呼叫 exportBatchLog 來匯出 CSV 和 ZIP ****
+            exportBatchLog();
         }
     }
 
     // 匯出 *批次* 遊戲紀錄 (多場合併)
     function exportBatchLog() {
-        if (!batchLog || batchLog.length === 0) {
-            alert("沒有可匯出的批次紀錄。");
-            return;
-        }
-
-        const headers = [
-            "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
-            "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
-            "P1_TotalScore", "P2_TotalScore",
-            "BoardState_Before", "BoardState_After" 
-        ];
-        
-        let csvContent = "\uFEFF"; 
-
-        batchLog.forEach((gameLog, gameIndex) => {
-            const gameID = gameIndex + 1;
-            
-            csvContent += `# 遊戲 ID: ${gameID}\n`;
-            csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
-            csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
-            csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`; 
-            csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
-            csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
-
-            csvContent += headers.join(",") + "\n";
-
-            gameLog.turns.forEach(entry => {
-                const segmentsStr = entry.segmentsDrawn.join('; ');
-                const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
-
-                const row = [
-                    gameID, 
-                    entry.turn,
-                    entry.player,
-                    escapeCSV(entry.playerType),
-                    escapeCSV(entry.move),
-                    escapeCSV(segmentsStr), 
-                    entry.scoreGained,
-                    escapeCSV(trianglesStr), 
-                    entry.newScoreP1,
-                    entry.newScoreP2,
-                    escapeCSV(entry.stateBefore), 
-                    escapeCSV(entry.stateAfter)
-                ];
-                csvContent += row.join(",") + "\n";
-            });
-
-            if (gameLog.summary.winnerMessage) {
-                csvContent += "\n# 遊戲總結 (Game " + gameID + ")\n";
-                csvContent += `# 勝利訊息: ${escapeCSV(gameLog.summary.winnerMessage)}\n`;
-                csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
-                csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
-            }
-            csvContent += "\n"; 
-        });
-
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        // (*** 取得共用時間戳 ***)
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-        const filename = `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`;
+
+        // --- 1. 處理 CSV ---
+        if (!batchLog || batchLog.length === 0) {
+            console.warn("沒有可匯出的批次 CSV 紀錄。");
+        } else {
+            const headers = [
+                "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
+                "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
+                "P1_TotalScore", "P2_TotalScore",
+                "BoardState_Before", "BoardState_After" 
+            ];
+            
+            let csvContent = "\uFEFF"; 
+
+            batchLog.forEach((gameLog, gameIndex) => {
+                const gameID = gameIndex + 1;
+                
+                csvContent += `# 遊戲 ID: ${gameID}\n`;
+                csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
+                csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
+                csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`; 
+                csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
+                csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
+
+                csvContent += headers.join(",") + "\n";
+
+                gameLog.turns.forEach(entry => {
+                    const segmentsStr = entry.segmentsDrawn.join('; ');
+                    const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
+
+                    const row = [
+                        gameID, 
+                        entry.turn,
+                        entry.player,
+                        escapeCSV(entry.playerType),
+                        escapeCSV(entry.move),
+                        escapeCSV(segmentsStr), 
+                        entry.scoreGained,
+                        escapeCSV(trianglesStr), 
+                        entry.newScoreP1,
+                        entry.newScoreP2,
+                        escapeCSV(entry.stateBefore), 
+                        escapeCSV(entry.stateAfter)
+                    ];
+                    csvContent += row.join(",") + "\n";
+                });
+
+                if (gameLog.summary.winnerMessage) {
+                    csvContent += "\n# 遊戲總結 (Game " + gameID + ")\n";
+                    csvContent += `# 勝利訊息: ${escapeCSV(gameLog.summary.winnerMessage)}\n`;
+                    csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
+                    csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
+                }
+                csvContent += "\n"; 
+            });
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const filename = `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`;
+            
+            triggerDownload(blob, filename);
+        }
         
-        triggerDownload(blob, filename);
+        // --- 2. 處理 PNG ZIP (**** 修改 ****) ---
+        // (移出 else 區塊，這樣即使 CSV 為空，也會嘗試匯出 ZIP)
+        if (pngStepLog.length === 0) {
+            console.warn("沒有可匯出的批次 PNG 紀錄。");
+        } else {
+            const zipFilename = `triangle_batch_steps_${batchLog.length}_games_${timestamp}.zip`;
+            createAndDownloadZip(zipFilename); // 傳入共用的時間戳檔名
+        }
     }
 
 
@@ -1323,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', () => {
         triggerDownload(blob, filename);
     }
     
-    // **** (新功能) 輔助函式：觸發下載 ****
+    // (輔助函式：觸發下載)
     function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1335,8 +1350,9 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
     }
 
-    // **** (新功能) 建立並下載 ZIP 檔案 ****
-    function createAndDownloadZip() {
+    // (建立並下載 ZIP 檔案)
+    // **** (修改) 接受自訂檔名 ****
+    function createAndDownloadZip(customFilename = null) {
         if (typeof JSZip === 'undefined') {
             console.error("JSZip 函式庫未載入！");
             alert("錯誤：無法建立 ZIP 檔案，JSZip 函式庫遺失。");
@@ -1350,18 +1366,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const zip = new JSZip();
         
         pngStepLog.forEach(entry => {
-            // entry.data 是 data URL (e.g., "data:image/png;base64,iVBOR...")
-            // 我們需要移除 data URL 的前綴
             const base64Data = entry.data.split(',')[1];
             zip.file(entry.filename, base64Data, { base64: true });
         });
 
         zip.generateAsync({ type: "blob" })
             .then(function(blob) {
-                // 產生 ZIP 檔案名稱
-                const date = new Date();
-                const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-                const filename = `triangle_steps_${timestamp}.zip`;
+                
+                let filename = "";
+                if (customFilename) {
+                    filename = customFilename;
+                } else {
+                    // 非批次模式的預設檔名
+                    const date = new Date();
+                    const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+                    filename = `triangle_steps_${timestamp}.zip`;
+                }
                 
                 triggerDownload(blob, filename);
             });
@@ -1389,36 +1409,38 @@ document.addEventListener('DOMContentLoaded', () => {
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         let filename = "";
 
-        if (isBatchRunning) {
-            // --- 情況 1: 批次模式 (永遠立即下載) ---
-            const gameIdStr = String(gameID).padStart(3, '0');
-            if (turnID !== null) {
-                // 批次模式的每一步
-                const turnIdStr = String(turnID).padStart(3, '0');
-                filename = `triangle_batch_board_game_${gameIdStr}_turn_${turnIdStr}.png`;
-            } else {
-                // 批次模式的最終畫面
-                filename = `triangle_batch_board_game_${gameIdStr}_FINAL_${timestamp}.png`;
-            }
+
+        if (turnID === null && gameID === null) {
+            // --- 情況 1: 手動點擊匯出按鈕 (立即下載) ---
+            filename = `triangle_board_${timestamp}.png`;
             tempCanvas.toBlob(function(blob) {
                 triggerDownload(blob, filename);
             });
 
-        } else if (!isBatchRunning && turnID !== null) {
-            // --- 情況 2: 非批次模式, 遊戲中的步驟 (暫存) ---
+        } else if (turnID !== null) {
+            // --- 情況 2: 遊戲中的步驟 (一律暫存) ---
             const turnIdStr = String(turnID).padStart(3, '0');
-            filename = `triangle_board_turn_${turnIdStr}.png`;
+            
+            if (isBatchRunning) {
+                // 批次模式：檔名包含 Game ID
+                const gameIdStr = String(gameID).padStart(3, '0');
+                filename = `Game_${gameIdStr}_Turn_${turnIdStr}.png`;
+            } else {
+                // 非批次模式：檔名不含 Game ID
+                filename = `triangle_board_turn_${turnIdStr}.png`;
+            }
             
             // 轉換為 data URL 並儲存
             const dataURL = tempCanvas.toDataURL('image/png');
             pngStepLog.push({ filename: filename, data: dataURL });
 
-        } else if (turnID === null) {
-            // --- 情況 3: 手動點擊匯出按鈕 (立即下載) ---
-            filename = `triangle_board_${timestamp}.png`;
-            tempCanvas.toBlob(function(blob) {
-                triggerDownload(blob, filename);
-            });
+        } else if (isBatchRunning && turnID === null) {
+            // --- 情況 3: 批次模式的 *最終* 畫面 (也暫存) ---
+            const gameIdStr = String(gameID).padStart(3, '0');
+            filename = `Game_${gameIdStr}_FINAL_Board.png`;
+            
+            const dataURL = tempCanvas.toDataURL('image/png');
+            pngStepLog.push({ filename: filename, data: dataURL });
         }
     }
 
