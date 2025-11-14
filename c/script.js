@@ -41,13 +41,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const scoreAndGoCheckbox = document.getElementById('score-and-go-checkbox');
 
     const inputModeSelect = document.getElementById('input-mode-select');
+    
+    // (**** 新功能 ****) 取得 AI 類型選單
+    const aiP1TypeGroup = document.getElementById('ai-p1-type-group');
+    const aiP2TypeGroup = document.getElementById('ai-p2-type-group');
+    const aiP1TypeSelect = document.getElementById('ai-p1-type-select');
+    const aiP2TypeSelect = document.getElementById('ai-p2-type-select');
 
     let uiControls = [
         resetButton, exportLogButton, exportPNGButton, 
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
         startBatchButton, batchCountInput,
         scoreAndGoCheckbox,
-        inputModeSelect 
+        inputModeSelect,
+        aiP1TypeSelect, aiP2TypeSelect // (**** 新功能 ****) 加入控制項
     ];
 
 
@@ -67,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 依棋盤大小產生 ROW_LENGTHS
     function computeRowLengths(size) {
         switch (size) {
-            case 'tiny': // (新加入)
+            case 'tiny':
                 return [2, 3, 2];
             case 'small':
                 return [3, 4, 5, 4, 3];
@@ -191,6 +198,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d1.r},${d1.c}_${d2.r},${d2.c}`;
     }
 
+    // (**** 新功能 ****) 更新 AI 類型選單的可見性
+    function updateAITypeVisibility() {
+        const mode = parseInt(gameModeSelect.value, 10);
+        
+        aiP1TypeGroup.classList.add('hidden');
+        aiP2TypeGroup.classList.add('hidden');
+        
+        if (mode === 1) { // P vs C
+            aiP2TypeGroup.classList.remove('hidden');
+        } else if (mode === 2) { // C vs C
+            aiP1TypeGroup.classList.remove('hidden');
+            aiP2TypeGroup.classList.remove('hidden');
+        }
+    }
+
 
     // 初始化遊戲
     function initGame() {
@@ -213,6 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         inputMode = inputModeSelect.value;
         
+        // (**** 新功能 ****) 根據模式顯示/隱藏 AI 類型選單
+        updateAITypeVisibility();
+        
         // 重設 *單場* 遊戲紀錄
         turnCounter = 1;
         gameHistoryLog = {
@@ -220,6 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 boardSize: boardSizeSelect.value,
                 lineLength: lineLengthSelect.value,
                 gameMode: isBatchRunning ? "電腦 V.S. 電腦" : gameModeSelect.options[gameModeSelect.selectedIndex].text,
+                // (**** 新功能 ****) 紀錄 AI 類型
+                aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
+                aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
                 isScoreAndGoAgain: isScoreAndGoAgain, 
                 inputMode: inputMode, 
                 dateTime: new Date().toISOString()
@@ -954,6 +982,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
         let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
         
+        // (**** 新功能 ****) 根據 AI 類型更新名稱
+        if (gameMode === 1) { // P vs C
+            player2Name = `電腦 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
+        } else if (gameMode === 2) { // C vs C
+            player1Name = `電腦 1 (${aiP1TypeSelect.options[aiP1TypeSelect.selectedIndex].text})`;
+            player2Name = `電腦 2 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
+        }
+
         player1ScoreBox.childNodes[0].nodeValue = `${player1Name}: `;
         player2ScoreBox.childNodes[0].nodeValue = `${player2Name}: `;
 
@@ -981,8 +1017,9 @@ document.addEventListener('DOMContentLoaded', () => {
             isAIThinking = false;
         }
         
-        let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
-        let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
+        // (**** 新功能 ****) 讀取更新後的 UI 名稱
+        let player1Name = player1ScoreBox.childNodes[0].nodeValue.replace(': ', '');
+        let player2Name = player2ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let winnerMessage = "";
 
         if (scores[1] > scores[2]) {
@@ -1075,8 +1112,17 @@ document.addEventListener('DOMContentLoaded', () => {
         logAI(`--- [主線程] 傳送遊戲狀態到 Worker ---`);
         aiStartTime = performance.now();
         
+        // (**** 新功能 ****) 決定要傳送哪種 AI 類型
+        let aiType = 'minimax'; // 預設值
+        if (currentPlayer === 1 && gameMode === 2) {
+            aiType = aiP1TypeSelect.value;
+        } else if (currentPlayer === 2 && (gameMode === 1 || gameMode === 2)) {
+            aiType = aiP2TypeSelect.value;
+        }
+        
         aiWorker.postMessage({
             command: 'start',
+            aiType: aiType, // (**** 新功能 ****) 傳遞 AI 類型
             gameState: {
                 dots: dots,
                 lines: lines,
@@ -1229,9 +1275,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let playerType = "Human";
         if (gameMode === 2) { 
-            playerType = "AI";
+            playerType = `AI (${player === 1 ? aiP1TypeSelect.value : aiP2TypeSelect.value})`; // (**** 新功能 ****)
         } else if (gameMode === 1 && player === 2) { 
-            playerType = "AI";
+            playerType = `AI (${aiP2TypeSelect.value})`; // (**** 新功能 ****)
         }
         
         const logEntry = {
@@ -1300,7 +1346,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
 
+        // (**** 修改 ****) 批次對戰*必須*是 C vs C
+        // 它會自動使用 UI 上選定的 AI 類型
         gameModeSelect.value = "2";
+        
+        // (**** 新功能 ****) 確保 AI 選單可見，以便 initGame 能讀取
+        updateAITypeVisibility(); 
+        
         initGame();
     }
     
@@ -1354,7 +1406,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 csvContent += `# 遊戲 ID: ${gameID}\n`;
                 csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
                 csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
-                csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`; 
+                csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`;
+                // (**** 新功能 ****) 
+                if (gameLog.settings.aiTypeP1) {
+                    csvContent += `# AI (P1) 類型: ${gameLog.settings.aiTypeP1}\n`;
+                }
+                if (gameLog.settings.aiTypeP2) {
+                    csvContent += `# AI (P2) 類型: ${gameLog.settings.aiTypeP2}\n`;
+                }
                 csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
                 csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
 
@@ -1426,7 +1485,14 @@ document.addEventListener('DOMContentLoaded', () => {
         csvContent += "# 遊戲設定\n";
         csvContent += `# 棋盤大小: ${gameHistoryLog.settings.boardSize}\n`;
         csvContent += `# 連線格數: ${gameHistoryLog.settings.lineLength}\n`;
-        csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`; 
+        csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`;
+        // (**** 新功能 ****) 
+        if (gameHistoryLog.settings.aiTypeP1) {
+            csvContent += `# AI (P1) 類型: ${gameHistoryLog.settings.aiTypeP1}\n`;
+        }
+        if (gameHistoryLog.settings.aiTypeP2) {
+            csvContent += `# AI (P2) 類型: ${gameHistoryLog.settings.aiTypeP2}\n`;
+        }
         csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
         csvContent += `# 紀錄時間: ${gameHistoryLog.settings.dateTime}\n\n`;
 
@@ -1609,13 +1675,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmLineButton) confirmLineButton.addEventListener('click', confirmLine);
     if (cancelLineButton) cancelLineButton.addEventListener('click', cancelLine);
     
-    if (gameModeSelect) gameModeSelect.addEventListener('change', initGame);
+    if (gameModeSelect) {
+        gameModeSelect.addEventListener('change', initGame);
+        // (**** 新功能 ****) 監聽模式變化，更新 AI 選單可見性
+        gameModeSelect.addEventListener('change', updateAITypeVisibility);
+    }
     if (boardSizeSelect) boardSizeSelect.addEventListener('change', initGame);
     if (lineLengthSelect) lineLengthSelect.addEventListener('change', initGame);
     
     if (scoreAndGoCheckbox) scoreAndGoCheckbox.addEventListener('change', initGame);
     
     if (inputModeSelect) inputModeSelect.addEventListener('change', initGame);
+    
+    // (**** 新功能 ****) AI 類型變更時，重啟遊戲
+    if (aiP1TypeSelect) aiP1TypeSelect.addEventListener('change', initGame);
+    if (aiP2TypeSelect) aiP2TypeSelect.addEventListener('change', initGame);
     
     if (exportLogButton) exportLogButton.addEventListener('click', exportGameLog);
     if (exportLogButtonModal) exportLogButtonModal.addEventListener('click', exportGameLog);
