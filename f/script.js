@@ -18,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalOverlay = document.getElementById('modal-overlay');
     const resetButtonModal = document.getElementById('reset-button-modal');
     const aiThinkingMessage = document.getElementById('ai-thinking-message'); 
-    const gameModeSelect = document.getElementById('game-mode-select');
+    
+    // **** (已移除) gameModeSelect ****
     
     // (**** 修改 ****) 將 boardSizeSelect 改為 boardSizeInput
     const boardSizeInput = document.getElementById('board-size-input');
@@ -45,24 +46,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const inputModeSelect = document.getElementById('input-mode-select');
     
-    // (**** 新功能 ****) 取得 AI 類型選單
-    const aiP1TypeGroup = document.getElementById('ai-p1-type-group');
-    const aiP2TypeGroup = document.getElementById('ai-p2-type-group');
-    const aiP1TypeSelect = document.getElementById('ai-p1-type-select');
-    const aiP2TypeSelect = document.getElementById('ai-p2-type-select');
+    // **** (已移除) 舊的 AI 類型選單 ****
+    
+    // **** (新功能) 取得控制器選單 ****
+    const p1ControllerSelect = document.getElementById('p1-controller-select');
+    const p2ControllerSelect = document.getElementById('p2-controller-select');
     
     // **** (新功能) 取得先手玩家選單 ****
     const startPlayerSelect = document.getElementById('start-player-select');
 
-    // (**** 修改 ****) 將 boardSizeSelect 改為 boardSizeInput
+    // (**** 修改 ****) 更新 uiControls 陣列
     let uiControls = [
         resetButton, exportLogButton, exportPNGButton, 
-        gameModeSelect, boardSizeInput, lineLengthSelect, 
+        boardSizeInput, lineLengthSelect, 
         startBatchButton, batchCountInput,
         scoreAndGoCheckbox,
         inputModeSelect,
-        aiP1TypeSelect, aiP2TypeSelect,
-        startPlayerSelect // **** (新功能) 加入控制項 ****
+        // **** (新功能) 加入新的控制器 ****
+        p1ControllerSelect, p2ControllerSelect,
+        startPlayerSelect
     ];
 
 
@@ -104,7 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let totalTriangles = 0;
     let selectedDot1 = null;
     let selectedDot2 = null;
-    let gameMode = 0; 
+    
+    // **** (新功能) 遊戲狀態變數 ****
+    let player1Controller = 'human';
+    let player2Controller = 'human';
+    // **** (已移除) gameMode ****
+    
     let REQUIRED_LINE_LENGTH = 1; 
     
     let isScoreAndGoAgain = false;
@@ -149,6 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 logAI(data.message);
             } else if (data.type === 'result') {
                 isAIThinking = false; 
+                // **** (修改) 只有在 AI 思考時才禁用 UI ****
+                toggleUIControls(true); 
+                
                 const endTime = performance.now();
                 const duration = (endTime - aiStartTime) / 1000;
                 if (!isBatchRunning) {
@@ -162,9 +172,13 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("AI Worker Error:", e);
             isAIThinking = false;
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
+            
+            // **** (修改) AI 錯誤時也要解鎖 UI ****
+            toggleUIControls(true); 
+            
             if (isBatchRunning) {
                 isBatchRunning = false;
-                toggleUIControls(true);
+                // toggleUIControls(true); // 已在上方呼叫
                 startBatchButton.classList.remove('hidden');
                 stopBatchButton.classList.add('hidden');
                 batchStatusMessage.textContent = "批次對戰因錯誤已中止。";
@@ -199,20 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d1.r},${d1.c}_${d2.r},${d2.c}`;
     }
 
-    // (**** 新功能 ****) 更新 AI 類型選單的可見性
-    function updateAITypeVisibility() {
-        const mode = parseInt(gameModeSelect.value, 10);
-        
-        aiP1TypeGroup.classList.add('hidden');
-        aiP2TypeGroup.classList.add('hidden');
-        
-        if (mode === 1) { // P vs C
-            aiP2TypeGroup.classList.remove('hidden');
-        } else if (mode === 2) { // C vs C
-            aiP1TypeGroup.classList.remove('hidden');
-            aiP2TypeGroup.classList.remove('hidden');
-        }
-    }
+    // **** (已移除) updateAITypeVisibility() ****
 
 
     // 初始化遊戲
@@ -226,6 +227,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         isAIThinking = false;
         
+        // **** (修改) 解鎖 UI ****
+        toggleUIControls(true); 
+        
         if (!isBatchRunning) {
             batchLog = [];
             // **** (修改) 僅在非批次模式下，才在遊戲開始時清空 PNG 暫存 ****
@@ -236,13 +240,26 @@ document.addEventListener('DOMContentLoaded', () => {
         
         inputMode = inputModeSelect.value;
         
-        // (**** 新功能 ****) 根據模式顯示/隱藏 AI 類型選單
-        updateAITypeVisibility();
+        // **** (已移除) 呼叫 updateAITypeVisibility() ****
         
         
         // (**** 修改 ****) 
         // A. 先讀取 UI 值
-        gameMode = isBatchRunning ? 2 : parseInt(gameModeSelect.value, 10);
+        
+        // **** (新功能) 讀取控制器設定 ****
+        if (isBatchRunning) {
+            // 批次模式必須是 C vs C
+            // 如果使用者選擇了 "Human"，自動升級為 "minimax"
+            player1Controller = p1ControllerSelect.value;
+            player2Controller = p2ControllerSelect.value;
+            if (player1Controller === 'human') player1Controller = 'minimax';
+            if (player2Controller === 'human') player2Controller = 'minimax';
+        } else {
+            // 非批次模式，直接讀取
+            player1Controller = p1ControllerSelect.value;
+            player2Controller = p2ControllerSelect.value;
+        }
+
         const baseSize = (boardSizeInput && boardSizeInput.value) ? parseInt(boardSizeInput.value, 10) : 4;
         ROW_LENGTHS = computeRowLengths(baseSize);
         
@@ -255,11 +272,12 @@ document.addEventListener('DOMContentLoaded', () => {
             settings: {
                 boardSize: `Custom [${ROW_LENGTHS.join(', ')}]`, // (修改)
                 lineLength: lineLengthSelect.value,
-                gameMode: isBatchRunning ? "電腦 V.S. 電腦" : gameModeSelect.options[gameModeSelect.selectedIndex].text,
-                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, // **** (新功能) 紀錄先手 ****
-                // (**** 新功能 ****) 紀錄 AI 類型
-                aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
-                aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
+                
+                // **** (新功能) 紀錄新的控制器設定 ****
+                player1Controller: player1Controller,
+                player2Controller: player2Controller,
+                
+                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
                 isScoreAndGoAgain: isScoreAndGoAgain, 
                 inputMode: inputMode, 
                 dateTime: new Date().toISOString()
@@ -426,14 +444,11 @@ document.addEventListener('DOMContentLoaded', () => {
             bindClickListeners();
         }
 
-        // **** (新功能) 判斷 *起始玩家* 是否為 AI ****
-        const isP1AI = (gameMode === 2);
-        const isP2AI = (gameMode === 1 || gameMode === 2);
-
+        // **** (修改) 判斷 *起始玩家* 是否為 AI ****
         let isStartingPlayerAI = false;
-        if (currentPlayer === 1 && isP1AI) {
+        if (currentPlayer === 1 && player1Controller !== 'human') {
             isStartingPlayerAI = true;
-        } else if (currentPlayer === 2 && isP2AI) {
+        } else if (currentPlayer === 2 && player2Controller !== 'human') {
             isStartingPlayerAI = true;
         }
 
@@ -700,9 +715,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleCanvasClick(e) {
         if (isBatchRunning || isAIThinking) return;
         
-        const isP1AI = (gameMode === 2);
-        const isP2AI = (gameMode === 1 || gameMode === 2);
-        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+        // **** (修改) 檢查當前玩家是否為 AI ****
+        if ((currentPlayer === 1 && player1Controller !== 'human') || (currentPlayer === 2 && player2Controller !== 'human')) {
             return;
         }
 
@@ -741,9 +755,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleDragStart(e) {
         if (isBatchRunning || isAIThinking) return;
         
-        const isP1AI = (gameMode === 2);
-        const isP2AI = (gameMode === 1 || gameMode === 2);
-        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+        // **** (修改) 檢查當前玩家是否為 AI ****
+        if ((currentPlayer === 1 && player1Controller !== 'human') || (currentPlayer === 2 && player2Controller !== 'human')) {
             return;
         }
         
@@ -839,9 +852,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (moveResult.scoreGained > 0 && isScoreAndGoAgain) {
             logAI(`--- 玩家 ${currentPlayer} 得分，再走一次 ---`);
-            const isP1AI = (gameMode === 2);
-            const isP2AI = (gameMode === 1 || gameMode === 2);
-            if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+            
+            // **** (修改) 檢查 AI 是否需要再走一次 ****
+            if ((currentPlayer === 1 && player1Controller !== 'human') || (currentPlayer === 2 && player2Controller !== 'human')) {
                 if (isBatchRunning) {
                     setTimeout(triggerAIMove, 10);
                 } else {
@@ -961,21 +974,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 切換玩家
     function switchPlayer() {
-        const isP1AI_current = (gameMode === 2);
-        const isP2AI_current = (gameMode === 1 || gameMode === 2);
+        // **** (修改) 隱藏 AI 紀錄 (如果上一位是 AI) ****
         if (aiLogContainer && !isBatchRunning) { 
-            if ((currentPlayer === 1 && isP1AI_current) || (currentPlayer === 2 && isP2AI_current)) {
+            if ((currentPlayer === 1 && player1Controller !== 'human') || (currentPlayer === 2 && player2Controller !== 'human')) {
+                // 上一位是 AI，隱藏 log
             } else {
                  aiLogContainer.classList.add('hidden');
             }
         }
 
         currentPlayer = (currentPlayer === 1) ? 2 : 1;
+        
+        // **** (新功能) 
+        // 讀取 *最新* 的控制器設定，以防使用者在對戰中途切換
+        // (僅在非批次模式下才這樣做)
+        if (!isBatchRunning) {
+            player1Controller = p1ControllerSelect.value;
+            player2Controller = p2ControllerSelect.value;
+        }
+        
         updateUI();
 
-        const isP1AI_new = (gameMode === 2);
-        const isP2AI_new = (gameMode === 1 || gameMode === 2);
-        const isNewPlayerAI = (currentPlayer === 1 && isP1AI_new) || (currentPlayer === 2 && isP2AI_new);
+        const isNewPlayerAI = (currentPlayer === 1 && player1Controller !== 'human') || (currentPlayer === 2 && player2Controller !== 'human');
 
         if (isNewPlayerAI) {
             triggerAIMove();
@@ -993,24 +1013,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // **** (新功能) 處理控制器即時切換 ****
+    function handleControllerChange(player) {
+        // 更新全域狀態
+        player1Controller = p1ControllerSelect.value;
+        player2Controller = p2ControllerSelect.value;
+        
+        // 立即更新計分板上的名稱
+        updateUI();
+        
+        // 檢查這個變更是否需要 AI *立刻* 接手
+        if (!isAIThinking && !isBatchRunning) {
+            const isAITurnNow = (currentPlayer === 1 && player1Controller !== 'human') ||
+                                (currentPlayer === 2 && player2Controller !== 'human');
+                                
+            if (isAITurnNow) {
+                // 使用者剛剛把 *目前* 的玩家切換成了 AI
+                // 給予 100ms 延遲讓 UI 更新，然後觸發 AI
+                logAI(`--- 玩家 ${currentPlayer} 控制器切換為 AI，開始接手 ---`);
+                setTimeout(triggerAIMove, 100);
+            }
+        }
+    }
+
+
     // 更新 UI
     function updateUI() {
         score1El.textContent = scores[1];
         score2El.textContent = scores[2];
         
-        let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
-        let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
+        // **** (修改) 根據控制器動態產生玩家名稱 ****
+        let p1Name = "玩家 1";
+        let p2Name = "玩家 2";
+
+        if (player1Controller !== 'human') {
+            const p1AIType = p1ControllerSelect.options[p1ControllerSelect.selectedIndex].text.replace('電腦 (', '').replace(')', '');
+            p1Name = `電腦 1 (${p1AIType})`;
+        }
         
-        // (**** 新功能 ****) 根據 AI 類型更新名稱
-        if (gameMode === 1) { // P vs C
-            player2Name = `電腦 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
-        } else if (gameMode === 2) { // C vs C
-            player1Name = `電腦 1 (${aiP1TypeSelect.options[aiP1TypeSelect.selectedIndex].text})`;
-            player2Name = `電腦 2 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
+        if (player2Controller !== 'human') {
+            const p2AIType = p2ControllerSelect.options[p2ControllerSelect.selectedIndex].text.replace('電腦 (', '').replace(')', '');
+            p2Name = `電腦 2 (${p2AIType})`;
         }
 
-        player1ScoreBox.childNodes[0].nodeValue = `${player1Name}: `;
-        player2ScoreBox.childNodes[0].nodeValue = `${player2Name}: `;
+        // 優化名稱：如果是 P vs C，顯示 "電腦" 而非 "電腦 2"
+        if (player1Controller === 'human' && player2Controller !== 'human') {
+            const p2AIType = p2ControllerSelect.options[p2ControllerSelect.selectedIndex].text.replace('電腦 (', '').replace(')', '');
+            p2Name = `電腦 (${p2AIType})`;
+        }
+        // 優化名稱：如果是 C vs P，顯示 "電腦" 而非 "電腦 1"
+        if (player1Controller !== 'human' && player2Controller === 'human') {
+             const p1AIType = p1ControllerSelect.options[p1ControllerSelect.selectedIndex].text.replace('電腦 (', '').replace(')', '');
+            p1Name = `電腦 (${p1AIType})`;
+        }
+        
+        player1ScoreBox.childNodes[0].nodeValue = `${p1Name}: `;
+        player2ScoreBox.childNodes[0].nodeValue = `${p2Name}: `;
+        // **** (修改結束) ****
 
 
         if (currentPlayer === 1) {
@@ -1036,7 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isAIThinking = false;
         }
         
-        // (**** 新功能 ****) 讀取更新後的 UI 名稱
+        // (**** 新功能) 讀取更新後的 UI 名稱
         let player1Name = player1ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let player2Name = player2ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let winnerMessage = "";
@@ -1085,6 +1144,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } else {
             // **** 非批次模式結束 ****
+            // **** (修改) 結束時解鎖 UI ****
+            toggleUIControls(true); 
+
             if (pngStepLog.length > 0) {
                 createAndDownloadZip(); // 傳遞 null 將使用預設檔名
             }
@@ -1125,18 +1187,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         isAIThinking = true;
+        
+        // **** (修改) AI 思考時，禁用 UI ****
+        toggleUIControls(false); 
+        
         if (aiThinkingMessage && !isBatchRunning) aiThinkingMessage.classList.remove('hidden');
         if (aiLogContainer && !isBatchRunning) aiLogContainer.classList.remove('hidden');
         
         logAI(`--- [主線程] 傳送遊戲狀態到 Worker ---`);
         aiStartTime = performance.now();
         
-        // (**** 新功能 ****) 決定要傳送哪種 AI 類型
+        // (**** 修改) 根據當前玩家的控制器決定 AI 類型 ****
         let aiType = 'minimax'; // 預設值
-        if (currentPlayer === 1 && gameMode === 2) {
-            aiType = aiP1TypeSelect.value;
-        } else if (currentPlayer === 2 && (gameMode === 1 || gameMode === 2)) {
-            aiType = aiP2TypeSelect.value;
+        if (currentPlayer === 1) {
+            aiType = player1Controller; // (值為 'minimax' 或 'greedy')
+        } else if (currentPlayer === 2) {
+            aiType = player2Controller; // (值為 'minimax' 或 'greedy')
         }
         
         aiWorker.postMessage({
@@ -1156,6 +1222,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleAIMoveResult(bestMove) {
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
+        
+        // (AI 運算已結束，但可能還在執行 moveResult，UI 保持禁用)
+        // (toggleUIControls(true) 會在 worker onmessage 'result' 處呼叫)
 
         if (bestMove && bestMove.dot1 && bestMove.dot2) {
             const dotA = dots[bestMove.dot1.r][bestMove.dot1.c];
@@ -1292,11 +1361,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const scoreAfter = scores[player];
         const scoreGained = scoreAfter - scoreBefore;
         
+        // **** (修改) 根據控制器設定玩家類型 ****
         let playerType = "Human";
-        if (gameMode === 2) { 
-            playerType = `AI (${player === 1 ? aiP1TypeSelect.value : aiP2TypeSelect.value})`; // (**** 新功能 ****)
-        } else if (gameMode === 1 && player === 2) { 
-            playerType = `AI (${aiP2TypeSelect.value})`; // (**** 新功能 ****)
+        if (player === 1 && player1Controller !== 'human') {
+            playerType = `AI (${player1Controller})`;
+        } else if (player === 2 && player2Controller !== 'human') {
+            playerType = `AI (${player2Controller})`;
         }
         
         const logEntry = {
@@ -1340,7 +1410,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 control.disabled = !isEnabled;
             }
         });
+        
+        // **** (新功能) 覆蓋規則 ****
+        // 控制器選單 *永遠* 保持啟用，*除非* 正在跑批次
+        if (!isBatchRunning) {
+            if (p1ControllerSelect) p1ControllerSelect.disabled = false;
+            if (p2ControllerSelect) p2ControllerSelect.disabled = false;
+        }
     }
+
 
     // 開始批次對戰
     function startBatchRun() {
@@ -1359,18 +1437,15 @@ document.addEventListener('DOMContentLoaded', () => {
         batchTotalGames = gameCount;
         batchGamesCompleted = 0;
 
-        toggleUIControls(false);
+        toggleUIControls(false); // (這會禁用所有 UI，包括控制器選單)
         startBatchButton.classList.add('hidden');
         stopBatchButton.classList.remove('hidden');
         
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
 
-        // (**** 修改 ****) 批次對戰*必須*是 C vs C
-        // 它會自動使用 UI 上選定的 AI 類型
-        gameModeSelect.value = "2";
-        
-        // (**** 新功能 ****) 確保 AI 選單可見，以便 initGame 能讀取
-        updateAITypeVisibility(); 
+        // **** (修改) 
+        // initGame() 會自動偵測 isBatchRunning = true
+        // 並自動將 'human' 升級為 'minimax'
         
         initGame();
     }
@@ -1425,15 +1500,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 csvContent += `# 遊戲 ID: ${gameID}\n`;
                 csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
                 csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
-                csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`;
-                csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`; // **** (新功能) ****
-                // (**** 新功能 ****) 
-                if (gameLog.settings.aiTypeP1) {
-                    csvContent += `# AI (P1) 類型: ${gameLog.settings.aiTypeP1}\n`;
-                }
-                if (gameLog.settings.aiTypeP2) {
-                    csvContent += `# AI (P2) 類型: ${gameLog.settings.aiTypeP2}\n`;
-                }
+                // **** (修改) 儲存新的控制器設定 ****
+                csvContent += `# 玩家 1 控制器: ${escapeCSV(gameLog.settings.player1Controller)}\n`;
+                csvContent += `# 玩家 2 控制器: ${escapeCSV(gameLog.settings.player2Controller)}\n`;
+                csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`;
                 csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
                 csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
 
@@ -1505,15 +1575,10 @@ document.addEventListener('DOMContentLoaded', () => {
         csvContent += "# 遊戲設定\n";
         csvContent += `# 棋盤大小: ${gameHistoryLog.settings.boardSize}\n`;
         csvContent += `# 連線格數: ${gameHistoryLog.settings.lineLength}\n`;
-        csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`;
-        csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`; // **** (新功能) ****
-        // (**** 新功能 ****) 
-        if (gameHistoryLog.settings.aiTypeP1) {
-            csvContent += `# AI (P1) 類型: ${gameHistoryLog.settings.aiTypeP1}\n`;
-        }
-        if (gameHistoryLog.settings.aiTypeP2) {
-            csvContent += `# AI (P2) 類型: ${gameHistoryLog.settings.aiTypeP2}\n`;
-        }
+        // **** (修改) 儲存新的控制器設定 ****
+        csvContent += `# 玩家 1 控制器: ${escapeCSV(gameHistoryLog.settings.player1Controller)}\n`;
+        csvContent += `# 玩家 2 控制器: ${escapeCSV(gameHistoryLog.settings.player2Controller)}\n`;
+        csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`;
         csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
         csvContent += `# 紀錄時間: ${gameHistoryLog.settings.dateTime}\n\n`;
 
@@ -1696,11 +1761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmLineButton) confirmLineButton.addEventListener('click', confirmLine);
     if (cancelLineButton) cancelLineButton.addEventListener('click', cancelLine);
     
-    if (gameModeSelect) {
-        gameModeSelect.addEventListener('change', initGame);
-        // (**** 新功能 ****) 監聽模式變化，更新 AI 選單可見性
-        gameModeSelect.addEventListener('change', updateAITypeVisibility);
-    }
+    // **** (已移除) gameModeSelect 監聽 ****
     
     // (**** 修改 ****) 綁定 Input 而不是 Select
     if (boardSizeInput) boardSizeInput.addEventListener('change', initGame);
@@ -1714,9 +1775,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (inputModeSelect) inputModeSelect.addEventListener('change', initGame);
     
-    // (**** 新功能 ****) AI 類型變更時，重啟遊戲
-    if (aiP1TypeSelect) aiP1TypeSelect.addEventListener('change', initGame);
-    if (aiP2TypeSelect) aiP2TypeSelect.addEventListener('change', initGame);
+    // **** (新功能) 綁定控制器即時切換 ****
+    if (p1ControllerSelect) {
+        p1ControllerSelect.addEventListener('change', () => {
+            handleControllerChange(1);
+        });
+    }
+    if (p2ControllerSelect) {
+        p2ControllerSelect.addEventListener('change', () => {
+            handleControllerChange(2);
+        });
+    }
     
     if (exportLogButton) exportLogButton.addEventListener('click', exportGameLog);
     if (exportLogButtonModal) exportLogButtonModal.addEventListener('click', exportGameLog);
