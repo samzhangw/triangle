@@ -14,6 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelLineButton = document.getElementById('cancel-line-button');
     const actionBar = document.getElementById('action-bar');
     
+    // **** (新功能) 取得佈局模式元素 ****
+    const setupModeButton = document.getElementById('setup-mode-button');
+    const setupActionBar = document.getElementById('setup-action-bar');
+    const setupP1Button = document.getElementById('setup-p1-button');
+    const setupP2Button = document.getElementById('setup-p2-button');
+    const setupClearButton = document.getElementById('setup-clear-button');
+    
     const resetButton = document.getElementById('reset-button');
     const modalOverlay = document.getElementById('modal-overlay');
     const resetButtonModal = document.getElementById('reset-button-modal');
@@ -42,23 +49,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const inputModeSelect = document.getElementById('input-mode-select');
     
-    // (**** 新功能 ****) 取得 AI 類型選單
     const aiP1TypeGroup = document.getElementById('ai-p1-type-group');
     const aiP2TypeGroup = document.getElementById('ai-p2-type-group');
     const aiP1TypeSelect = document.getElementById('ai-p1-type-select');
     const aiP2TypeSelect = document.getElementById('ai-p2-type-select');
     
-    // **** (新功能) 取得先手玩家選單 ****
     const startPlayerSelect = document.getElementById('start-player-select');
 
-    let uiControls = [
-        resetButton, exportLogButton, exportPNGButton, 
+    // **** (新功能) 分離出「遊戲中」的控制項，以便在佈局模式下禁用 ****
+    let playControls = [
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
         startBatchButton, batchCountInput,
         scoreAndGoCheckbox,
         inputModeSelect,
         aiP1TypeSelect, aiP2TypeSelect,
-        startPlayerSelect // **** (新功能) 加入控制項 ****
+        startPlayerSelect
+    ];
+    
+    // **** (新功能) uiControls 用於 AI 思考或批次時 *全部* 禁用 ****
+    let uiControls = [
+        ...playControls,
+        resetButton, exportLogButton, exportPNGButton,
+        setupModeButton // **** (新功能) 加入佈局按鈕 ****
     ];
 
 
@@ -113,6 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isScoreAndGoAgain = false;
     
     let inputMode = 'drag'; 
+    
+    // **** (新功能) 佈局模式狀態 ****
+    let isSetupMode = false;
 
     // 拖曳畫線狀態
     let isDrawing = false; 
@@ -121,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameHistoryLog = {};
     let turnCounter = 1;
     
-    // **** (新功能) 用於暫存 PNG 步驟 (批次或單場) ****
     let pngStepLog = []; 
 
     // 批次對戰狀態
@@ -202,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d1.r},${d1.c}_${d2.r},${d2.c}`;
     }
 
-    // (**** 新功能 ****) 更新 AI 類型選單的可見性
+    // 更新 AI 類型選單的可見性
     function updateAITypeVisibility() {
         const mode = parseInt(gameModeSelect.value, 10);
         
@@ -220,6 +234,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化遊戲
     function initGame() {
+        
+        // **** (新功能) 如果在佈局模式下按下「重新開始」，則退出佈局模式 ****
+        if (isSetupMode) {
+            isSetupMode = false;
+            setupModeButton.textContent = '進入佈局模式';
+            setupModeButton.classList.remove('success');
+            setupModeButton.classList.add('primary');
+            togglePlayControls(true); // 重新啟用遊戲設定
+            setupActionBar.classList.add('hidden');
+        }
+        
         try {
             initializeAIWorker();
         } catch (e) {
@@ -231,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!isBatchRunning) {
             batchLog = [];
-            // **** (修改) 僅在非批次模式下，才在遊戲開始時清空 PNG 暫存 ****
             pngStepLog = [];
         }
         
@@ -239,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         inputMode = inputModeSelect.value;
         
-        // (**** 新功能 ****) 根據模式顯示/隱藏 AI 類型選單
         updateAITypeVisibility();
         
         // 重設 *單場* 遊戲紀錄
@@ -249,8 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 boardSize: boardSizeSelect.value,
                 lineLength: lineLengthSelect.value,
                 gameMode: isBatchRunning ? "電腦 V.S. 電腦" : gameModeSelect.options[gameModeSelect.selectedIndex].text,
-                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, // **** (新功能) 紀錄先手 ****
-                // (**** 新功能 ****) 紀錄 AI 類型
+                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
                 aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
                 aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
                 isScoreAndGoAgain: isScoreAndGoAgain, 
@@ -274,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = gridWidth + PADDING * 2;
         canvas.height = gridHeight + PADDING * 2;
 
-        // **** (新功能) 根據選單設定先手玩家 ****
         const startPlayerValue = startPlayerSelect.value;
         currentPlayer = (startPlayerValue === '2') ? 2 : 1;
         
@@ -308,8 +329,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     x: c * DOT_SPACING_X + offsetX,
                     y: r * DOT_SPACING_Y + PADDING,
                     r: r, c: c,
-                    id: `${r},${c}`, // **** (新功能) 加入 ID ****
-                    number: 0       // **** (新功能) 加入數字 (0=未填) ****
+                    id: `${r},${c}`, 
+                    number: 0       
                 };
             }
         });
@@ -412,7 +433,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // **** (新功能) 執行 1-2-3 數字解謎 ****
         initializeNumberPuzzle();
         
         updateUI();
@@ -425,7 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
             bindClickListeners();
         }
 
-        // **** (新功能) 判斷 *起始玩家* 是否為 AI ****
         const isP1AI = (gameMode === 2);
         const isP2AI = (gameMode === 1 || gameMode === 2);
 
@@ -439,7 +458,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isStartingPlayerAI) {
             triggerAIMove();
         } else {
-            // 如果是人類玩家開局，檢查是否無棋可走
             const allMoves = findAllValidMoves(lines);
             if (allMoves.length === 0) {
                 logAI(`--- 遊戲開始，但玩家 ${currentPlayer} 已無棋可走 ---`);
@@ -451,53 +469,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================
-    // **** (新功能) 1-2-3 數字謎題演算法 ****
+    // (數字謎題演算法... 此區塊未變更)
     // ==========================================================
     
-    // (全域變數，用於儲存點與三角形的快速對應)
     let dotToTrianglesMap = new Map();
 
-    /**
-     * 初始化數字謎題
-     */
     function initializeNumberPuzzle() {
         console.log("開始解 1-2-3 數字謎題...");
         dotToTrianglesMap.clear();
         const allDots = dots.flat();
         
-        // 1. 為所有點建立空的 Map 條目
         for (const dot of allDots) {
             dotToTrianglesMap.set(dot.id, []);
         }
         
-        // 2. 遍歷所有三角形，將它們加入到對應點的 Map 中
         for (const tri of triangles) {
             for (const dot of tri.dots) {
                 dotToTrianglesMap.get(dot.id).push(tri);
             }
         }
 
-        // 3. 找到中心點並設定為 3
         const centerRowIndex = Math.floor(dots.length / 2);
         const centerColIndex = Math.floor(dots[centerRowIndex].length / 2);
         const centerDot = dots[centerRowIndex][centerColIndex];
         centerDot.number = 3;
 
-        // 4. 開始遞迴解謎
         const success = solveNumberPuzzle(0, allDots);
         
         if (success) {
             console.log("數字謎題解答成功！");
         } else {
             console.warn("此棋盤大小的數字謎題無解 (或中心點 3 導致無解)。");
-            // (重設回 0，僅保留中心點的 3)
             allDots.forEach(d => { if (d !== centerDot) d.number = 0; });
         }
     }
 
-    /**
-     * 檢查在某個點填入某個數字是否有效
-     */
     function checkNumberValidity(dot, num) {
         const trianglesForThisDot = dotToTrianglesMap.get(dot.id);
         
@@ -506,12 +512,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const num1 = otherDots[0].number;
             const num2 = otherDots[1].number;
 
-            // 規則 1: 同一個三角形內不能有重複數字
             if ((num1 !== 0 && num1 === num) || (num2 !== 0 && num2 === num)) {
                 return false;
             }
             
-            // 規則 2: 如果另兩個點已填，三數相加必須為 6 (1+2+3)
             if (num1 !== 0 && num2 !== 0) {
                 if (num + num1 + num2 !== 6) {
                     return false;
@@ -521,38 +525,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
 
-    /**
-     * 回溯演算法 (Backtracking Solver)
-     */
     function solveNumberPuzzle(dotIndex, allDots) {
-        // 終止條件：所有點都檢查完畢
         if (dotIndex === allDots.length) {
-            return true; // 找到解
+            return true; 
         }
 
         const dot = allDots[dotIndex];
 
-        // 如果這個點已經有數字 (例如中心點)，跳到下一個點
         if (dot.number !== 0) {
             return solveNumberPuzzle(dotIndex + 1, allDots);
         }
 
-        // 嘗試填入 1, 2, 3
         for (let num = 1; num <= 3; num++) {
             if (checkNumberValidity(dot, num)) {
-                dot.number = num; // 填入
+                dot.number = num; 
                 
-                // 遞迴
                 if (solveNumberPuzzle(dotIndex + 1, allDots)) {
                     return true;
                 }
                 
-                // 回溯
                 dot.number = 0; 
             }
         }
-
-        // 如果 1, 2, 3 都不能填，表示此路徑無解
         return false;
     }
 
@@ -628,20 +622,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 3. 繪製點 (**** 修改 ****)
+        // 3. 繪製點 
         dots.forEach(row => {
             row.forEach(dot => {
                 
-                // **** (新功能) 繪製數字 (在點的上方) ****
                 if (dot.number > 0) {
-                    ctx.fillStyle = '#2c3e50'; // 主要文字顏色
+                    ctx.fillStyle = '#2c3e50'; 
                     ctx.font = `bold ${isMobile ? 10 : 12}px "Nunito", sans-serif`;
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom'; // 文字底部對齊
-                    ctx.fillText(dot.number, dot.x, dot.y - DOT_RADIUS - (isMobile ? 1 : 2)); // 畫在點上方
+                    ctx.textBaseline = 'bottom'; 
+                    ctx.fillText(dot.number, dot.x, dot.y - DOT_RADIUS - (isMobile ? 1 : 2)); 
                 }
 
-                // 繪製點 (圓圈)
                 ctx.beginPath();
                 ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI); 
                 ctx.fillStyle = '#34495e';
@@ -653,23 +645,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedDot1) {
             ctx.beginPath();
             ctx.arc(selectedDot1.x, selectedDot1.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            // **** (新功能) 佈局模式下使用中性色 ****
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.stroke();
         }
         if (selectedDot2) {
             ctx.beginPath();
             ctx.arc(selectedDot2.x, selectedDot2.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.stroke();
         }
         
-        if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
+        // **** (新功能) 判斷使用哪個預覽線邏輯 ****
+        const isValidPreview = isSetupMode ? 
+            isValidSetupLine(selectedDot1, selectedDot2) : 
+            isValidPreviewLine(selectedDot1, selectedDot2, lines);
+
+        if (selectedDot1 && selectedDot2 && isValidPreview) {
             ctx.beginPath();
             ctx.moveTo(selectedDot1.x, selectedDot1.y);
             ctx.lineTo(selectedDot2.x, selectedDot2.y);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.setLineDash([8, 4]); 
             ctx.stroke();
@@ -697,6 +695,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 「點擊」模式的邏輯
     function handleCanvasClick(e) {
+        
+        // **** (新功能) 如果是佈局模式，轉交給佈局點擊處理函式 ****
+        if (isSetupMode) {
+            handleSetupDotClick(e);
+            return;
+        }
+
         if (isBatchRunning || isAIThinking) return;
         
         const isP1AI = (gameMode === 2);
@@ -738,6 +743,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 滑鼠/觸控按下 (拖曳模式)
     function handleDragStart(e) {
+        // **** (新功能) 佈局模式下禁用拖曳 ****
+        if (isSetupMode) return; 
+
         if (isBatchRunning || isAIThinking) return;
         
         const isP1AI = (gameMode === 2);
@@ -795,6 +803,299 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ==========================================================
+    // **** (新功能) 佈局模式 (Setup Mode) 相關函式 ****
+    // ==========================================================
+    
+    /**
+     * 啟用/禁用「遊戲中」的控制項
+     */
+    function togglePlayControls(isEnabled) {
+        playControls.forEach(control => {
+            if (control) {
+                control.disabled = !isEnabled;
+            }
+        });
+    }
+
+    /**
+     * 切換佈局模式
+     */
+    function toggleSetupMode() {
+        isSetupMode = !isSetupMode;
+        
+        if (isSetupMode) {
+            // --- 進入佈局模式 ---
+            
+            // 1. 先重設遊戲，清空畫布
+            initGame(); 
+            // 2. 立即重新設定 isSetupMode，因為 initGame 會清除它
+            isSetupMode = true; 
+            
+            // 3. 更新按鈕
+            setupModeButton.textContent = '完成佈局並開始';
+            setupModeButton.classList.remove('primary');
+            setupModeButton.classList.add('success');
+            
+            // 4. 禁用遊戲設定
+            togglePlayControls(false); 
+            
+            // 5. 顯示佈局控制列
+            setupActionBar.classList.remove('hidden');
+            actionBar.classList.remove('visible'); // 隱藏遊戲控制列
+            
+            // 6. 清除選取並綁定 *佈局專用* 監聽器
+            cancelLine();
+            removeCanvasListeners();
+            bindClickListeners(); // 佈局模式只用點擊
+
+        } else {
+            // --- 退出佈局模式 (開始遊戲) ---
+            
+            // 1. 更新按鈕
+            setupModeButton.textContent = '進入佈局模式';
+            setupModeButton.classList.remove('success');
+            setupModeButton.classList.add('primary');
+            
+            // 2. 重新啟用遊戲設定
+            togglePlayControls(true); 
+            
+            // 3. 隱藏佈局控制列
+            setupActionBar.classList.add('hidden');
+            
+            // 4. 清除選取
+            cancelSetupLine();
+            
+            // 5. 根據佈局啟動遊戲
+            startGameFromLayout(); 
+        }
+    }
+
+    /**
+     * 佈局模式下的畫布點擊處理
+     */
+    function handleSetupDotClick(e) {
+        const pos = getMousePos(e);
+        const clickedDot = findNearestDot(pos.x, pos.y);
+        
+        if (!clickedDot) {
+            cancelSetupLine();
+            return;
+        }
+
+        if (selectedDot1 === null) {
+            selectedDot1 = clickedDot;
+        } 
+        else if (selectedDot2 === null) {
+            if (clickedDot === selectedDot1) {
+                cancelSetupLine(); 
+            } else {
+                // 使用佈局專用的驗證
+                if (isValidSetupLine(selectedDot1, clickedDot)) { 
+                    selectedDot2 = clickedDot;
+                } else {
+                    cancelSetupLine();
+                }
+            }
+        }
+        drawCanvas();
+    }
+    
+    /**
+     * 佈局模式專用的線段驗證 (不檢查格數，只檢查是否存在)
+     */
+    function isValidSetupLine(dotA, dotB) {
+        if (!dotA || !dotB) return false;
+        
+        const allDotsOnLine = findIntermediateDots(dotA, dotB);
+        const segmentIds = [];
+        for (let i = 0; i < allDotsOnLine.length - 1; i++) {
+            segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
+        }
+        
+        if (segmentIds.length === 0) return false; // 必須至少 1 格
+        
+        // 檢查所有分段是否都存在於 lines 物件中
+        return segmentIds.every(id => !!lines[id]);
+    }
+    
+    /**
+     * 佈局模式：應用線段 (P1, P2 或 清除)
+     */
+    function applySetupLine(player) {
+        if (!selectedDot1 || !selectedDot2) return;
+        
+        if (!isValidSetupLine(selectedDot1, selectedDot2)) {
+             cancelSetupLine();
+             return;
+        }
+        
+        const allDotsOnLine = findIntermediateDots(selectedDot1, selectedDot2);
+        const segmentIds = [];
+        for (let i = 0; i < allDotsOnLine.length - 1; i++) {
+            segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
+        }
+
+        for (const id of segmentIds) {
+            if (player === 1) {
+                lines[id].drawn = true;
+                lines[id].player = 1;
+                lines[id].sharedBy = 0; // 重設
+            } else if (player === 2) {
+                lines[id].drawn = true;
+                lines[id].player = 2;
+                lines[id].sharedBy = 0; // 重設
+            } else { // player === 0 (清除)
+                lines[id].drawn = false;
+                lines[id].player = 0;
+                lines[id].sharedBy = 0;
+            }
+        }
+        
+        cancelSetupLine(); // 清除選取
+        drawCanvas(); // 立即重繪
+    }
+    
+    /**
+     * 佈局模式：取消選取
+     */
+    function cancelSetupLine() {
+        selectedDot1 = null;
+        selectedDot2 = null;
+        drawCanvas();
+    }
+
+    /**
+     * 從佈局狀態開始遊戲
+     */
+    function startGameFromLayout() {
+        // 1. 重新綁定正常的遊戲監聽器
+        removeCanvasListeners();
+        if (inputModeSelect.value === 'drag') {
+            bindDragListeners();
+        } else {
+            bindClickListeners();
+        }
+
+        // 2. 根據佈局的線段，重新計算分數和三角形
+        scores = { 1: 0, 2: 0 };
+        let totalFilledThisGame = 0;
+        
+        triangles.forEach(tri => {
+            const isComplete = tri.lineKeys.every(key => lines[key] && lines[key].drawn);
+            
+            if (isComplete) {
+                // 判斷歸屬：以線段較多者為準
+                let p1Lines = 0;
+                let p2Lines = 0;
+                tri.lineKeys.forEach(key => {
+                    if (lines[key].player === 1) p1Lines++;
+                    if (lines[key].player === 2) p2Lines++;
+                    // 共享線也算
+                    if (lines[key].sharedBy === 1) p1Lines++;
+                    if (lines[key].sharedBy === 2) p2Lines++;
+                });
+
+                let owner = 0;
+                if (p1Lines > p2Lines) owner = 1;
+                else if (p2Lines > p1Lines) owner = 2;
+                // (平手或無主線段，則不計分)
+                
+                tri.filled = true;
+                tri.player = owner;
+                if (owner !== 0) {
+                    scores[owner]++;
+                }
+                totalFilledThisGame++;
+                
+            } else {
+                tri.filled = false;
+                tri.player = 0;
+            }
+        });
+        
+        // 3. 讀取目前的遊戲設定
+        gameMode = parseInt(gameModeSelect.value, 10);
+        isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        inputMode = inputModeSelect.value;
+        currentPlayer = parseInt(startPlayerSelect.value, 10);
+        
+        // 4. 重設遊戲紀錄
+        turnCounter = 1;
+        pngStepLog = [];
+        gameHistoryLog = {
+            settings: {
+                boardSize: boardSizeSelect.value,
+                lineLength: lineLengthSelect.value,
+                gameMode: gameModeSelect.options[gameModeSelect.selectedIndex].text,
+                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
+                aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
+                aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
+                isScoreAndGoAgain: isScoreAndGoAgain, 
+                inputMode: inputMode, 
+                dateTime: new Date().toISOString(),
+                // (新) 標記為從佈局開始
+                startedFromLayout: true
+            },
+            turns: [
+                // (新) 新增一個 "第 0 回合" 紀錄佈局
+                {
+                    turn: 0,
+                    player: "System",
+                    playerType: "Layout", 
+                    move: "從佈局開始",
+                    segmentsDrawn: [], 
+                    scoreGained: 0,
+                    trianglesCompleted: [], 
+                    newScoreP1: scores[1],
+                    newScoreP2: scores[2],
+                    stateBefore: "", 
+                    stateAfter: getBoardStateString(lines) // 紀錄初始狀態
+                }
+            ],
+            summary: {}
+        };
+        
+        // 5. 更新 UI
+        updateAITypeVisibility();
+        updateUI();
+        drawCanvas();
+        
+        // 6. 檢查遊戲是否在佈局後就結束了
+        if (totalFilledThisGame === totalTriangles) {
+            logAI(`--- 從佈局開始，但遊戲已結束 ---`);
+            endGame();
+            return;
+        }
+
+        // 7. 檢查先手玩家是否為 AI
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        let isStartingPlayerAI = false;
+        if (currentPlayer === 1 && isP1AI) {
+            isStartingPlayerAI = true;
+        } else if (currentPlayer === 2 && isP2AI) {
+            isStartingPlayerAI = true;
+        }
+
+        if (isStartingPlayerAI) {
+            triggerAIMove();
+        } else {
+            // 檢查人類玩家是否還有棋可走
+            const allMoves = findAllValidMoves(lines);
+            if (allMoves.length === 0) {
+                logAI(`--- 從佈局開始，但玩家 ${currentPlayer} 已無棋可走 ---`);
+                if (aiLogContainer) aiLogContainer.classList.remove('hidden');
+                endGame();
+                return;
+            }
+        }
+    }
+
+    // ==========================================================
+    // (結束 佈局模式 相關函式)
+    // ==========================================================
+
 
     // "確認連線" (點擊和拖曳模式共用)
     function confirmLine() {
@@ -821,13 +1122,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         drawCanvas();
 
-        // **** (修改) 儲存人類玩家的 PNG 步驟 (一律暫存) ****
-        // (僅在非批次模式下觸發，因為批次模式沒有人類玩家)
         if (!isBatchRunning) {
-            const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
-            exportCanvasAsPNG(null, turnID); // gameID 為 null 表示非批次
+            const turnID = turnCounter - 1; 
+            exportCanvasAsPNG(null, turnID); 
         }
-        // **** (修改) 結束 ****
         
         updateUI(); 
 
@@ -1000,10 +1298,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
         let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
         
-        // (**** 新功能 ****) 根據 AI 類型更新名稱
-        if (gameMode === 1) { // P vs C
+        if (gameMode === 1) { 
             player2Name = `電腦 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
-        } else if (gameMode === 2) { // C vs C
+        } else if (gameMode === 2) { 
             player1Name = `電腦 1 (${aiP1TypeSelect.options[aiP1TypeSelect.selectedIndex].text})`;
             player2Name = `電腦 2 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
         }
@@ -1035,7 +1332,6 @@ document.addEventListener('DOMContentLoaded', () => {
             isAIThinking = false;
         }
         
-        // (**** 新功能 ****) 讀取更新後的 UI 名稱
         let player1Name = player1ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let player2Name = player2ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let winnerMessage = "";
@@ -1057,7 +1353,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isBatchRunning) {
             
-            // 批次模式：匯出最終畫面的 PNG (這將被暫存)
             exportCanvasAsPNG(batchGamesCompleted + 1, null); 
             
             batchLog.push(gameHistoryLog); 
@@ -1070,7 +1365,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (batchGamesCompleted < batchTotalGames) {
                 setTimeout(initGame, 10); 
             } else {
-                // **** 批次對戰*全部*結束 ****
                 isBatchRunning = false;
                 toggleUIControls(true); 
                 startBatchButton.classList.remove('hidden'); 
@@ -1078,14 +1372,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (batchStatusMessage) {
                     batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+ZIP)。`;
                 }
-                // 批次結束後，同時匯出 CSV 和 ZIP
                 exportBatchLog(); 
             }
 
         } else {
-            // **** 非批次模式結束 ****
             if (pngStepLog.length > 0) {
-                createAndDownloadZip(); // 傳遞 null 將使用預設檔名
+                // (**** 新功能) 如果是從佈局開始，給 ZIP 一個特殊檔名 ****
+                let zipFilename = null;
+                if (gameHistoryLog.settings.startedFromLayout) {
+                    const date = new Date(gameHistoryLog.settings.dateTime);
+                    const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+                    zipFilename = `triangle_layout_steps_${timestamp}.zip`;
+                }
+                createAndDownloadZip(zipFilename);
             }
             
             if (winnerText) {
@@ -1130,8 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logAI(`--- [主線程] 傳送遊戲狀態到 Worker ---`);
         aiStartTime = performance.now();
         
-        // (**** 新功能 ****) 決定要傳送哪種 AI 類型
-        let aiType = 'minimax'; // 預設值
+        let aiType = 'minimax'; 
         if (currentPlayer === 1 && gameMode === 2) {
             aiType = aiP1TypeSelect.value;
         } else if (currentPlayer === 2 && (gameMode === 1 || gameMode === 2)) {
@@ -1140,7 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         aiWorker.postMessage({
             command: 'start',
-            aiType: aiType, // (**** 新功能 ****) 傳遞 AI 類型
+            aiType: aiType, 
             gameState: {
                 dots: dots,
                 lines: lines,
@@ -1170,11 +1468,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             drawCanvas();
 
-            // **** (修改) 儲存 AI 每一步的 PNG (所有模式都暫存) ****
             const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
-            const turnID = turnCounter - 1; // turnCounter 已在 applyMoveToBoard 中 ++
+            const turnID = turnCounter - 1; 
             exportCanvasAsPNG(gameID, turnID);
-            // **** (修改) 結束 ****
 
             updateUI(); 
 
@@ -1293,9 +1589,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let playerType = "Human";
         if (gameMode === 2) { 
-            playerType = `AI (${player === 1 ? aiP1TypeSelect.value : aiP2TypeSelect.value})`; // (**** 新功能 ****)
+            playerType = `AI (${player === 1 ? aiP1TypeSelect.value : aiP2TypeSelect.value})`; 
         } else if (gameMode === 1 && player === 2) { 
-            playerType = `AI (${aiP2TypeSelect.value})`; // (**** 新功能 ****)
+            playerType = `AI (${aiP2TypeSelect.value})`; 
         }
         
         const logEntry = {
@@ -1348,10 +1644,15 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("請輸入有效的對戰次數 (大於 0)。");
             return;
         }
+        
+        // **** (新功能) 批次模式下不允許佈局 ****
+        if (isSetupMode) {
+            alert("請先完成或退出佈局模式，再開始批次對戰。");
+            return;
+        }
 
         isBatchRunning = true;
         
-        // **** (修改) 批次開始時，清空 PNG 和 CSV 的日誌 ****
         pngStepLog = [];
         batchLog = [];
         
@@ -1364,11 +1665,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
 
-        // (**** 修改 ****) 批次對戰*必須*是 C vs C
-        // 它會自動使用 UI 上選定的 AI 類型
         gameModeSelect.value = "2";
         
-        // (**** 新功能 ****) 確保 AI 選單可見，以便 initGame 能讀取
         updateAITypeVisibility(); 
         
         initGame();
@@ -1394,7 +1692,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 batchStatusMessage.textContent = `批次已手動終止 (完成 ${batchGamesCompleted} 場)。`;
             }
 
-            // **** (修改) 終止時，呼叫 exportBatchLog 來匯出 CSV 和 ZIP ****
             exportBatchLog();
         }
     }
@@ -1425,8 +1722,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
                 csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
                 csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`;
-                csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`; // **** (新功能) ****
-                // (**** 新功能 ****) 
+                csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`; 
                 if (gameLog.settings.aiTypeP1) {
                     csvContent += `# AI (P1) 類型: ${gameLog.settings.aiTypeP1}\n`;
                 }
@@ -1475,7 +1771,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // --- 2. 處理 PNG ZIP (**** 修改 ****) ---
-        // (移出 else 區塊，這樣即使 CSV 為空，也會嘗試匯出 ZIP)
         if (pngStepLog.length === 0) {
             console.warn("沒有可匯出的批次 PNG 紀錄。");
         } else {
@@ -1505,8 +1800,7 @@ document.addEventListener('DOMContentLoaded', () => {
         csvContent += `# 棋盤大小: ${gameHistoryLog.settings.boardSize}\n`;
         csvContent += `# 連線格數: ${gameHistoryLog.settings.lineLength}\n`;
         csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`;
-        csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`; // **** (新功能) ****
-        // (**** 新功能 ****) 
+        csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`; 
         if (gameHistoryLog.settings.aiTypeP1) {
             csvContent += `# AI (P1) 類型: ${gameHistoryLog.settings.aiTypeP1}\n`;
         }
@@ -1514,6 +1808,10 @@ document.addEventListener('DOMContentLoaded', () => {
             csvContent += `# AI (P2) 類型: ${gameHistoryLog.settings.aiTypeP2}\n`;
         }
         csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
+        // **** (新功能) 標記是否從佈局開始 ****
+        if (gameHistoryLog.settings.startedFromLayout) {
+             csvContent += `# 狀態: 從佈局開始\n`;
+        }
         csvContent += `# 紀錄時間: ${gameHistoryLog.settings.dateTime}\n\n`;
 
         csvContent += headers.join(",") + "\n";
@@ -1548,7 +1846,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const date = new Date(gameHistoryLog.settings.dateTime);
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-        const filename = `triangle_game_log_${timestamp}.csv`;
+        
+        // **** (新功能) 佈局模式使用不同檔名 ****
+        const filenamePrefix = gameHistoryLog.settings.startedFromLayout ? "triangle_layout_log_" : "triangle_game_log_";
+        const filename = `${filenamePrefix}${timestamp}.csv`;
         
         triggerDownload(blob, filename);
     }
@@ -1566,7 +1867,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // (建立並下載 ZIP 檔案)
-    // **** (修改) 接受自訂檔名 ****
     function createAndDownloadZip(customFilename = null) {
         if (typeof JSZip === 'undefined') {
             console.error("JSZip 函式庫未載入！");
@@ -1580,6 +1880,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const zip = new JSZip();
         
+        // **** (新功能) 如果是從佈局開始，加入第 0 步 (初始狀態) ****
+        if (gameHistoryLog.settings.startedFromLayout && turnCounter > 0) {
+            // 第 0 步 (Turn 0) 已經在 startGameFromLayout 時被記錄
+            // 我們需要在這裡重新產生一次
+            
+            // 1. 建立一個暫時的畫布並繪製
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            tempCtx.fillStyle = '#ffffff'; 
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // 2. 繪製 *當前* 遊戲狀態 (因為 drawCanvas() 畫的是全域)
+            // 我們需要一個能畫 *特定* lines/triangles 的函式
+            // (*** 妥協 ***): 
+            // 我們在 startGameFromLayout 時，就立刻存第一張圖
+            // --> 這會導致 pngStepLog[0] 是 Turn 0
+            // (*** 檢視 startGameFromLayout ***) ...
+            // (*** 檢視 exportCanvasAsPNG ***) ...
+            
+            // (*** 更好的方案 ***):
+            // 我們在 applyMoveToBoard (人類) 和 handleAIMoveResult (AI)
+            // 儲存 PNG 時，使用的 turnID 是 (turnCounter - 1)
+            // 在 startGameFromLayout 中，我們將 turnCounter 設為 1
+            // 並且在 log 中加入 turn 0。
+            // 我們可以在 startGameFromLayout 的 *結尾* 手動呼叫一次
+            // exportCanvasAsPNG(null, 0) 來儲存第 0 步
+            
+            // (*** 方案 C - 最簡單 ***): 
+            // 讓使用者在佈局完成 *後*，手動按一次 "下載棋盤 (PNG)"
+            // 
+            // (*** 方案 D - 最終方案 ***): 
+            // 在 startGameFromLayout 結尾，手動呼叫 exportCanvasAsPNG(null, 0)
+            // 這樣 pngStepLog[0] 就會是 Turn_000.png
+            
+            // (*** 已在 startGameFromLayout 的 applyMoveToBoard 之後處理 ***)
+            // (*** 檢視... 不，是在 applyMoveToBoard 裡處理的 ***)
+            
+            // (*** 檢視: pngStepLog 是在 exportCanvasAsPNG 裡 push 的 ***)
+            // (*** 我們在 handleAIMoveResult 和 confirmLine 裡呼叫 ***)
+            // (*** 我們需要在 startGameFromLayout 結尾手動呼叫 ***)
+            
+            // (*** 移至 startGameFromLayout 結尾 ***)
+        }
+
         pngStepLog.forEach(entry => {
             const base64Data = entry.data.split(',')[1];
             zip.file(entry.filename, base64Data, { base64: true });
@@ -1603,7 +1949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     
-    // **** (修改) 匯出棋盤為 PNG (主要邏輯) ****
+    // 匯出棋盤為 PNG (主要邏輯)
     function exportCanvasAsPNG(gameID = null, turnID = null) {
         if (!canvas) {
             alert("找不到畫布！");
@@ -1627,7 +1973,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (turnID === null && gameID === null) {
             // --- 情況 1: 手動點擊匯出按鈕 (立即下載) ---
-            filename = `triangle_board_${timestamp}.png`;
+            // (**** 新功能) 佈局模式下使用不同檔名 ****
+            const prefix = isSetupMode ? "triangle_layout_" : "triangle_board_";
+            filename = `${prefix}${timestamp}.png`;
+            
             tempCanvas.toBlob(function(blob) {
                 triggerDownload(blob, filename);
             });
@@ -1642,7 +1991,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 filename = `Game_${gameIdStr}_Turn_${turnIdStr}.png`;
             } else {
                 // 非批次模式：檔名不含 Game ID
-                filename = `triangle_board_turn_${turnIdStr}.png`;
+                // (**** 新功能) 區分一般遊戲和佈局遊戲 ****
+                const prefix = gameHistoryLog.settings.startedFromLayout ? "Layout_Turn_" : "Turn_";
+                filename = `triangle_board_${prefix}${turnIdStr}.png`;
             }
             
             // 轉換為 data URL 並儲存
@@ -1695,29 +2046,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirmLineButton) confirmLineButton.addEventListener('click', confirmLine);
     if (cancelLineButton) cancelLineButton.addEventListener('click', cancelLine);
     
+    // **** (新功能) 綁定佈局模式按鈕 ****
+    if (setupModeButton) setupModeButton.addEventListener('click', toggleSetupMode);
+    if (setupP1Button) setupP1Button.addEventListener('click', () => applySetupLine(1));
+    if (setupP2Button) setupP2Button.addEventListener('click', () => applySetupLine(2));
+    if (setupClearButton) setupClearButton.addEventListener('click', () => applySetupLine(0));
+    
+    
     if (gameModeSelect) {
         gameModeSelect.addEventListener('change', initGame);
-        // (**** 新功能 ****) 監聽模式變化，更新 AI 選單可見性
         gameModeSelect.addEventListener('change', updateAITypeVisibility);
     }
     if (boardSizeSelect) boardSizeSelect.addEventListener('change', initGame);
     if (lineLengthSelect) lineLengthSelect.addEventListener('change', initGame);
     
-    // **** (新功能) 綁定先手玩家選單 ****
     if (startPlayerSelect) startPlayerSelect.addEventListener('change', initGame);
     
     if (scoreAndGoCheckbox) scoreAndGoCheckbox.addEventListener('change', initGame);
     
     if (inputModeSelect) inputModeSelect.addEventListener('change', initGame);
     
-    // (**** 新功能 ****) AI 類型變更時，重啟遊戲
     if (aiP1TypeSelect) aiP1TypeSelect.addEventListener('change', initGame);
     if (aiP2TypeSelect) aiP2TypeSelect.addEventListener('change', initGame);
     
     if (exportLogButton) exportLogButton.addEventListener('click', exportGameLog);
     if (exportLogButtonModal) exportLogButtonModal.addEventListener('click', exportGameLog);
     
-    // 綁定 PNG 匯出按鈕 (手動)
     if (exportPNGButton) exportPNGButton.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
     if (exportPNGButtonModal) exportPNGButtonModal.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
 
