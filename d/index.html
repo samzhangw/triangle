@@ -57,10 +57,14 @@
 
 
             <div id="game-controls">
-                
                 <div class="control-group">
-                    <label for="board-size-input" class="control-label">棋盤大小 (N)</label>
-                    <input type="number" id="board-size-input" class="control-select" value="4" min="2" max="10">
+                    <label for="board-size-select" class="control-label">棋盤大小</label>
+                    <select id="board-size-select" class="control-select">
+                        <option value="tiny">最小</option>
+                        <option value="small">小</option>
+                        <option value="medium" selected>中</option>
+                        <option value="large">大</option>
+                    </select>
                 </div>
                 <div class="control-group">
                     <label for="line-length-select" class="control-label">連線格數</label>
@@ -70,22 +74,12 @@
                         <option value="5">5 格</option>
                     </select>
                     </div>
-
                 <div class="control-group">
-                    <label for="p1-controller-select" class="control-label">玩家 1 控制器</label>
-                    <select id="p1-controller-select" class="control-select">
-                        <option value="human" selected>人類 (Human)</option>
-                        <option value="minimax">電腦 (Minimax)</option>
-                        <option value="greedy">電腦 (Greedy)</option>
-                    </select>
-                </div>
-
-                <div class="control-group">
-                    <label for="p2-controller-select" class="control-label">玩家 2 控制器</label>
-                    <select id="p2-controller-select" class="control-select">
-                        <option value="human" selected>人類 (Human)</option>
-                        <option value="minimax">電腦 (Minimax)</option>
-                        <option value="greedy">電腦 (Greedy)</option>
+                    <label for="game-mode-select" class="control-label">遊戲模式</label>
+                    <select id="game-mode-select" class="control-select">
+                        <option value="0" selected>玩家 V.S. 玩家</option>
+                        <option value="1">玩家 V.S. 電腦</option>
+                        <option value="2">電腦 V.S. 電腦</option>
                     </select>
                 </div>
 
@@ -97,6 +91,20 @@
                     </select>
                 </div>
                 
+                <div class="control-group hidden" id="ai-p1-type-group">
+                    <label for="ai-p1-type-select" class="control-label">AI (P1) 類型</label>
+                    <select id="ai-p1-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="greedy">Greedy (貪婪)</option>
+                    </select>
+                </div>
+                <div class="control-group hidden" id="ai-p2-type-group">
+                    <label for="ai-p2-type-select" class="control-label">AI (P2) 類型</label>
+                    <select id="ai-p2-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="greedy">Greedy (貪婪)</option>
+                    </select>
+                </div>
                 <div class="control-group">
                     <label for="input-mode-select" class="control-label">操作模式</label>
                     <select id="input-mode-select" class="control-select">
