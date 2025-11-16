@@ -32,6 +32,11 @@
     --btn-danger-top: #f06151;
     --btn-danger-bottom: #e74c3c;
     --btn-danger-border: #c0392b;
+    
+    /* (新) 中性按鈕 (用於 "清除選取") */
+    --btn-neutral-top: #bdc3c7;
+    --btn-neutral-bottom: #95a5a6;
+    --btn-neutral-border: #7f8c8d;
 
     /* 陰影 */
     --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
@@ -228,6 +233,15 @@ canvas:hover {
     pointer-events: auto;
 }
 
+/* **** (新功能) 佈局模式控制列 **** */
+#setup-action-bar {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    flex-direction: row;
+}
+
+
 /* 6b. 主要控制區 (右欄) */
 #game-controls {
     display: grid;
@@ -383,6 +397,12 @@ canvas:hover {
     border-bottom-color: var(--btn-danger-border);
 }
 
+/* (新) 中性按鈕 (用於清除選取) */
+.btn:not(.primary):not(.success):not(.danger) {
+    background-image: linear-gradient(to bottom, var(--btn-neutral-top), var(--btn-neutral-bottom));
+    border-bottom-color: var(--btn-neutral-border);
+}
+
 
 /* --- 7. 遊戲結束 Modal --- */
 #modal-overlay {
@@ -500,6 +520,11 @@ canvas:hover {
     
     /* 確認/取消按鈕改為堆疊 */
     #action-bar {
+        flex-direction: column;
+    }
+    
+    /* (新功能) 佈局模式控制列也改為堆疊 */
+    #setup-action-bar {
         flex-direction: column;
     }
 
