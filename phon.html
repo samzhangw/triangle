@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 (顯示步驟版)</title>
+    <title>AI 賽局演變分析器 (全展開版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
     <style>
-        :root { --primary: #0ea5e9; --bg: #f8fafc; --card-bg: #ffffff; --text: #334155; }
+        :root { --primary: #0ea5e9; --bg: #f1f5f9; --card-bg: #ffffff; --text: #334155; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 30px; color: var(--text); }
         .container { max-width: 1400px; margin: 0 auto; }
         
@@ -35,54 +35,63 @@
         .btn-download { background: #10b981; display: none; }
 
         /* 結果列表 */
-        .results-list { display: flex; flex-direction: column; gap: 30px; }
+        .results-list { display: flex; flex-direction: column; gap: 40px; }
 
-        /* 群組卡片 */
+        /* 群組卡片 (大框框) */
         .group-card {
-            background: var(--card-bg); border-radius: 16px; padding: 25px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-left: 6px solid var(--primary);
+            background: var(--card-bg); border-radius: 16px; padding: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-top: 6px solid var(--primary);
             animation: slideIn 0.5s ease-out;
         }
         
         .group-header { 
             display: flex; justify-content: space-between; align-items: center; 
-            margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; 
+            margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; 
         }
-        .group-title { font-weight: 700; font-size: 1.25rem; color: #0f172a; }
-        .group-members { font-size: 0.9rem; color: #64748b; margin-top: 5px; }
-        .tag { background: #f1f5f9; padding: 4px 8px; border-radius: 4px; border: 1px solid #e2e8f0; margin-right: 5px; }
+        .group-title { font-weight: 700; font-size: 1.5rem; color: #0f172a; }
+        .group-count { background: #e0f2fe; color: var(--primary); padding: 5px 12px; border-radius: 20px; font-weight: bold; }
 
-        /* 步驟時間軸 (核心修改) */
-        .timeline-container {
-            display: flex; align-items: flex-start; gap: 10px; 
-            overflow-x: auto; padding-bottom: 15px; /* 預留捲軸空間 */
+        /* 單一賽局列 (每一行的樣式) */
+        .game-row {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 20px; margin-bottom: 20px;
         }
-        
-        /* 隱藏預設捲軸但保留功能 (Chrome/Safari) */
+        .game-label {
+            font-weight: 700; font-size: 1.1rem; color: var(--primary);
+            margin-bottom: 15px; display: flex; align-items: center; gap: 8px;
+        }
+        .game-label::before { content: "♟️"; font-size: 1.2rem; }
+
+        /* 時間軸 */
+        .timeline-container {
+            display: flex; align-items: flex-start; gap: 8px; 
+            overflow-x: auto; padding-bottom: 10px;
+        }
+        /* 捲軸美化 */
         .timeline-container::-webkit-scrollbar { height: 8px; }
         .timeline-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
         .timeline-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
         .step-item {
             flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
-            width: 120px; position: relative;
+            width: 110px; position: relative;
         }
         
         .step-img {
-            width: 100%; height: 120px; object-fit: contain; 
-            border: 1px solid #e2e8f0; border-radius: 8px; background: white;
+            width: 100%; height: 110px; object-fit: contain; 
+            border: 1px solid #cbd5e1; border-radius: 6px; background: white;
             transition: transform 0.2s; cursor: zoom-in;
         }
-        .step-img:hover { transform: scale(1.05); border-color: var(--primary); }
+        .step-img:hover { transform: scale(1.05); border-color: var(--primary); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
 
         .step-label {
-            margin-top: 8px; font-size: 0.85rem; font-weight: 600; 
-            color: #475569; background: #f8fafc; padding: 2px 8px; border-radius: 10px;
+            margin-top: 6px; font-size: 0.8rem; font-weight: 600; 
+            color: #64748b; background: #fff; padding: 2px 8px; border-radius: 10px; border: 1px solid #e2e8f0;
         }
 
         .arrow-separator {
-            flex: 0 0 auto; display: flex; align-items: center; height: 120px;
-            color: #cbd5e1; font-size: 1.5rem; font-weight: bold;
+            flex: 0 0 auto; display: flex; align-items: center; height: 110px;
+            color: #cbd5e1; font-size: 1.2rem; font-weight: bold;
         }
 
         /* 燈箱效果 */
@@ -100,8 +109,8 @@
 <body>
 
 <div class="container">
-    <h1>AI 賽局演變分析器</h1>
-    <p class="desc">自動歸類相同策略，並顯示從 Turn 1 開始的完整演變步驟</p>
+    <h1>AI 賽局演變分析器 (全展開版)</h1>
+    <p class="desc">相同策略的賽局會歸類在同一張卡片中，並逐一顯示所有步驟供比對</p>
 
     <div class="upload-area" id="dropZone">
         <h3>📂 拖曳圖片到這裡</h3>
@@ -110,7 +119,7 @@
     </div>
 
     <div class="controls">
-        <button id="analyzeBtn" disabled>🚀 開始分析步驟</button>
+        <button id="analyzeBtn" disabled>🚀 開始分析</button>
         <button id="downloadBtn" class="btn-download">📊 下載報表</button>
     </div>
     
@@ -199,15 +208,15 @@
         statusLog.textContent = "正在歸類策略...";
         clusteredGroups = performClustering(gameIds, gameSignatures);
 
-        // 4. 渲染結果 (含步驟)
-        renderTimelineGroups(clusteredGroups, gameData);
+        // 4. 渲染結果 (全展開)
+        renderExpandedGroups(clusteredGroups, gameData);
         
         statusLog.textContent = `分析完成！共 ${clusteredGroups.length} 種策略模式。`;
         analyzeBtn.disabled = false;
         downloadBtn.style.display = 'block';
     });
 
-    // --- 演算法 ---
+    // --- 演算法 (維持不變) ---
     function performClustering(gameIds, signatures) {
         const groups = [];
         const visited = new Set();
@@ -242,52 +251,53 @@
         return true;
     }
 
-    // --- 渲染 (重點修改區) ---
-    function renderTimelineGroups(groups, gameData) {
+    // --- 渲染 (改寫為全展開) ---
+    function renderExpandedGroups(groups, gameData) {
         resultsList.innerHTML = '';
         groups.forEach((group, idx) => {
-            const repGameId = group.repId;
-            const turns = Object.keys(gameData[repGameId]).map(Number).sort((a,b)=>a-b);
+            const groupCard = document.createElement('div');
+            groupCard.className = 'group-card';
             
-            const div = document.createElement('div');
-            div.className = 'group-card';
-            
-            const membersTags = group.members.map(m => `<span class="tag">Game ${m}</span>`).join('');
-            
-            // 建立 Timeline HTML
-            let timelineHtml = '<div class="timeline-container">';
-            turns.forEach((turn, tIdx) => {
-                const imgUrl = URL.createObjectURL(gameData[repGameId][turn]);
-                
-                // 加入箭頭 (除了第一個)
-                if (tIdx > 0) {
-                    timelineHtml += `<div class="arrow-separator">→</div>`;
-                }
-
-                timelineHtml += `
-                    <div class="step-item">
-                        <img src="${imgUrl}" class="step-img" 
-                             onclick="showModal('${imgUrl}', 'Game ${repGameId} - Turn ${turn}')">
-                        <div class="step-label">Turn ${turn}</div>
-                    </div>
-                `;
-            });
-            timelineHtml += '</div>';
-
-            div.innerHTML = `
+            // 卡片標題
+            groupCard.innerHTML = `
                 <div class="group-header">
-                    <div>
-                        <div class="group-title">策略模式 ${idx + 1}</div>
-                        <div class="group-members">包含賽局: ${membersTags}</div>
-                    </div>
-                    <div style="text-align:right">
-                        <span style="font-size:2rem; color:#cbd5e1; font-weight:bold;">${group.members.length}</span>
-                        <span style="color:#64748b; font-size:0.9rem;">局</span>
-                    </div>
+                    <div class="group-title">策略模式 ${idx + 1}</div>
+                    <span class="group-count">包含 ${group.members.length} 局</span>
                 </div>
-                ${timelineHtml}
             `;
-            resultsList.appendChild(div);
+            
+            // 迴圈：針對群組內的「每一個」Game 建立一列
+            group.members.forEach(gameId => {
+                const turns = Object.keys(gameData[gameId]).map(Number).sort((a,b)=>a-b);
+                
+                // 建立該局的時間軸
+                let timelineHtml = '<div class="timeline-container">';
+                turns.forEach((turn, tIdx) => {
+                    const imgUrl = URL.createObjectURL(gameData[gameId][turn]);
+                    
+                    if (tIdx > 0) timelineHtml += `<div class="arrow-separator">→</div>`;
+
+                    timelineHtml += `
+                        <div class="step-item">
+                            <img src="${imgUrl}" class="step-img" 
+                                 onclick="showModal('${imgUrl}', 'Game ${gameId} - Turn ${turn}')">
+                            <div class="step-label">Turn ${turn}</div>
+                        </div>
+                    `;
+                });
+                timelineHtml += '</div>';
+
+                // 將該局加入卡片
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'game-row';
+                rowDiv.innerHTML = `
+                    <div class="game-label">Game ${gameId}</div>
+                    ${timelineHtml}
+                `;
+                groupCard.appendChild(rowDiv);
+            });
+
+            resultsList.appendChild(groupCard);
         });
     }
 
@@ -297,7 +307,7 @@
         modalCaption.textContent = text;
     }
 
-    // --- 影像處理函式 (維持不變) ---
+    // --- 影像處理函式 ---
     function loadImage(file) {
         return new Promise(resolve => {
             const img = new Image();
@@ -376,7 +386,7 @@
         });
         const ws = XLSX.utils.json_to_sheet(data);
         XLSX.utils.book_append_sheet(wb, ws, "分類結果");
-        XLSX.writeFile(wb, "Game_Step_Analysis.xlsx");
+        XLSX.writeFile(wb, "Game_Full_Analysis.xlsx");
     });
 </script>
 </body>
