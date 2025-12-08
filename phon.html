@@ -1,0 +1,311 @@
+ <!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 棋局序列比對器 (Game Sequence Matcher)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root { --primary: #2563eb; --match: #10b981; --diff: #ef4444; --bg: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 30px; color: #1e293b; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        
+        h1 { color: var(--primary); text-align: center; margin-bottom: 10px; }
+        .desc { text-align: center; color: #64748b; margin-bottom: 30px; }
+
+        /* 上傳區 */
+        .upload-area {
+            border: 2px dashed #cbd5e1; border-radius: 12px; padding: 2rem;
+            text-align: center; cursor: pointer; transition: 0.2s; background: #f1f5f9;
+        }
+        .upload-area:hover { border-color: var(--primary); background: #eff6ff; }
+        
+        /* 控制區 */
+        .controls { display: flex; gap: 15px; justify-content: center; margin: 20px 0; }
+        button {
+            padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; 
+            color: white; font-weight: 600; background: var(--primary);
+        }
+        button:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        /* 比對表格 */
+        .sequence-table {
+            width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-top: 20px;
+            overflow-x: auto; display: block; white-space: nowrap;
+        }
+        .game-row { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        
+        /* 賽局標題 */
+        .game-header {
+            width: 120px; flex-shrink: 0; font-weight: bold; font-size: 1.1rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #e2e8f0; height: 140px; border-radius: 8px;
+        }
+
+        /* 回合卡片 */
+        .turn-card {
+            width: 120px; height: 140px; background: white; border: 1px solid #e2e8f0;
+            border-radius: 8px; display: flex; flex-direction: column; align-items: center;
+            padding: 5px; position: relative; transition: 0.2s;
+        }
+        .turn-card img { width: 100px; height: 100px; object-fit: contain; }
+        .turn-label { font-size: 0.8rem; color: #64748b; margin-top: 5px; }
+        
+        /* 比對結果標示 */
+        .match-indicator {
+            position: absolute; top: -10px; right: -10px; width: 24px; height: 24px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; color: white; border: 2px solid white; z-index: 10;
+        }
+        .match-yes { background: var(--match); content: "✓"; }
+        .match-no { background: var(--diff); content: "✕"; }
+
+        /* 基準線標記 */
+        .baseline-row { border: 2px solid var(--primary); background: #eff6ff; }
+        .baseline-tag { font-size: 0.7rem; color: var(--primary); background: #dbeafe; padding: 2px 6px; border-radius: 4px; margin-top: 4px;}
+
+        #statusLog { text-align: center; margin-top: 10px; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>AI 棋局序列比對器</h1>
+    <p class="desc">上傳檔名如 "Game_001_Turn_001.png" 的圖片，系統將自動排列並比對局勢相似度（支援旋轉判定）</p>
+
+    <div class="upload-area" id="dropZone">
+        <h3>📂 拖曳所有棋局圖片到這裡</h3>
+        <p>請一次選取 Game_001, Game_005 等所有回合的圖片</p>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+    </div>
+
+    <div class="controls">
+        <label>容許差異: <input type="number" id="threshold" value="5" style="width:50px; text-align:center;"></label>
+        <button id="analyzeBtn" disabled>開始序列比對</button>
+    </div>
+
+    <div id="statusLog">準備就緒</div>
+    <div id="resultContainer"></div>
+</div>
+
+<script>
+    // --- 核心邏輯 ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const statusLog = document.getElementById('statusLog');
+    const resultContainer = document.getElementById('resultContainer');
+
+    let uploadedFiles = [];
+    const IMG_SIZE = 150; // 分析用的縮圖大小
+    const ANGLES = [0, 60, 120, 180, 240, 300]; // 六邊形旋轉角度
+
+    // 1. 檔案處理
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = '#eff6ff'; });
+    dropZone.addEventListener('drop', (e) => { 
+        e.preventDefault(); 
+        dropZone.style.background = '#f1f5f9';
+        handleFiles(e.dataTransfer.files); 
+    });
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+        const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+        if (imgs.length === 0) return;
+        uploadedFiles = [...uploadedFiles, ...imgs];
+        statusLog.innerText = `已載入 ${uploadedFiles.length} 張圖片`;
+        analyzeBtn.disabled = false;
+    }
+
+    analyzeBtn.addEventListener('click', async () => {
+        analyzeBtn.disabled = true;
+        resultContainer.innerHTML = '';
+        statusLog.innerText = "正在解析檔名與結構...";
+        
+        // 1. 解析與分組
+        const gameData = {}; // { "001": { 1: file, 2: file }, "005": ... }
+        const allTurns = new Set();
+
+        for (let file of uploadedFiles) {
+            // Regex 解析: Game_001_Turn_002 -> gameId="001", turnId="2"
+            const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i);
+            if (match) {
+                const gId = match[1];
+                const tId = parseInt(match[2]);
+                if (!gameData[gId]) gameData[gId] = {};
+                gameData[gId][tId] = file;
+                allTurns.add(tId);
+            }
+        }
+
+        const sortedGames = Object.keys(gameData).sort();
+        const maxTurn = Math.max(...allTurns);
+        
+        if (sortedGames.length === 0) {
+            statusLog.innerText = "❌ 找不到符合 'Game_XXX_Turn_XXX' 格式的檔案";
+            analyzeBtn.disabled = false;
+            return;
+        }
+
+        // 2. 提取特徵 (Hash)
+        statusLog.innerText = "正在計算特徵值 (含旋轉判定)...";
+        const gameHashes = {}; // { "001": { 1: "10101...", 2: "..." } }
+
+        for (let gId of sortedGames) {
+            gameHashes[gId] = {};
+            for (let t = 1; t <= maxTurn; t++) {
+                if (gameData[gId][t]) {
+                    const img = await loadImage(gameData[gId][t]);
+                    // 計算旋轉不變的 Hash
+                    gameHashes[gId][t] = await getRotatedHash(img); 
+                }
+            }
+        }
+
+        // 3. 渲染比對結果
+        renderTable(sortedGames, maxTurn, gameData, gameHashes);
+        statusLog.innerText = "比對完成！第一列為基準，後續列與其比對。";
+        analyzeBtn.disabled = false;
+    });
+
+    // --- 輔助函式 ---
+
+    function loadImage(file) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
+    // 計算圖像的 Hash (取所有旋轉角度中"字典序最小"的那個，確保旋轉後 Hash 一致)
+    function getRotatedHash(img) {
+        // 1. 預處理 (裁切 + 縮放)
+        const canvas = preprocessImage(img);
+        
+        let minHash = null;
+        for (let angle of ANGLES) {
+            const rotCanvas = rotateCanvas(canvas, angle);
+            const hash = calculateHash(rotCanvas);
+            if (minHash === null || hash < minHash) minHash = hash;
+        }
+        return minHash;
+    }
+
+    function preprocessImage(img) {
+        const size = IMG_SIZE;
+        const cvs = document.createElement('canvas');
+        cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0,0,size,size);
+        
+        // 簡單置中繪製 (不進行複雜裁切，假設原圖比例一致)
+        const scale = Math.min(size/img.naturalWidth, size/img.naturalHeight) * 0.9;
+        const w = img.naturalWidth * scale;
+        const h = img.naturalHeight * scale;
+        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+        return cvs;
+    }
+
+    function rotateCanvas(source, angle) {
+        if (angle === 0) return source;
+        const cvs = document.createElement('canvas');
+        cvs.width = source.width; cvs.height = source.height;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.translate(cvs.width/2, cvs.height/2);
+        ctx.rotate(angle * Math.PI / 180);
+        ctx.drawImage(source, -cvs.width/2, -cvs.height/2);
+        return cvs;
+    }
+
+    // 簡單的區塊 Hash (16x16)
+    function calculateHash(canvas) {
+        const size = 16; 
+        const cvs = document.createElement('canvas');
+        cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(canvas, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+        
+        let hash = "";
+        // 採樣邏輯：顏色敏感 (分辨紅白藍)
+        for(let i=0; i<data.length; i+=4) {
+            const r=data[i], g=data[i+1], b=data[i+2];
+            if ((r+g+b)/3 > 220) hash += "0"; // 白
+            else if (r > g+30 && r > b+30) hash += "1"; // 紅
+            else if (b > r+30 && b > g+30) hash += "2"; // 藍
+            else hash += "3"; // 黑/灰
+        }
+        return hash;
+    }
+
+    function hammingDist(s1, s2) {
+        let d = 0;
+        for(let i=0; i<s1.length; i++) if(s1[i]!==s2[i]) d++;
+        return d;
+    }
+
+    // --- 渲染邏輯 ---
+    function renderTable(games, maxTurn, fileData, hashes) {
+        const threshold = parseInt(document.getElementById('threshold').value) || 5;
+        const baseGame = games[0]; // 以第一個 Game 當作基準 (Baseline)
+
+        let html = `<div class="sequence-table">`;
+
+        // 渲染每一列 (每一個 Game)
+        games.forEach((gId, gIdx) => {
+            const isBaseline = (gIdx === 0);
+            html += `<div class="game-row ${isBaseline ? 'baseline-row' : ''}">`;
+            
+            // 標題欄
+            html += `
+                <div class="game-header">
+                    <div>Game ${gId}</div>
+                    ${isBaseline ? '<div class="baseline-tag">比對基準</div>' : ''}
+                </div>
+            `;
+
+            // 回合欄
+            for (let t = 1; t <= maxTurn; t++) {
+                const file = fileData[gId][t];
+                let indicatorHtml = '';
+                
+                // 比對邏輯：如果不是基準列，且該回合有圖，則跟基準列比對
+                if (!isBaseline && file && hashes[baseGame][t]) {
+                    const dist = hammingDist(hashes[gId][t], hashes[baseGame][t]);
+                    const isMatch = dist <= threshold;
+                    indicatorHtml = `
+                        <div class="match-indicator ${isMatch ? 'match-yes' : 'match-no'}" 
+                             title="差異度: ${dist}">
+                             ${isMatch ? '✓' : '✕'}
+                        </div>
+                    `;
+                }
+
+                if (file) {
+                    html += `
+                        <div class="turn-card">
+                            ${indicatorHtml}
+                            <img src="${URL.createObjectURL(file)}">
+                            <div class="turn-label">Turn ${t}</div>
+                        </div>
+                    `;
+                } else {
+                    html += `<div class="turn-card" style="background:#f8fafc; border:1px dashed #ccc;"></div>`;
+                }
+            }
+            html += `</div>`;
+        });
+        html += `</div>`;
+        resultContainer.innerHTML = html;
+    }
+</script>
+</body>
+</html>
