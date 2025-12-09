@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 Pro (直覺比對版)</title>
+    <title>AI 賽局演變分析器 Pro (直覺鎖定版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -25,7 +25,6 @@
         h1 { font-size: 2.2rem; margin: 0 0 10px 0; font-weight: 800; color: var(--text-main); }
         .gradient-text { background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .pro-badge { font-size: 0.5em; vertical-align: middle; background: var(--text-main); color: white; padding: 4px 8px; border-radius: 6px; -webkit-text-fill-color: white; }
-
         .desc { color: var(--text-light); font-size: 1rem; }
         .btn-help { position: absolute; top: 20px; right: 20px; background: #f1f5f9; color: var(--text-main); border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
         .btn-help:hover { background: var(--primary); color: white; transform: rotate(15deg); }
@@ -129,8 +128,8 @@
             <p>3. <b>修正</b>：按住卡片標題旁的 <code>⋮⋮</code> 圖示可拖曳分類。</p>
             <p>4. <b>比對</b>：選取兩局後點擊比對。
                 <ul>
-                    <li>可輸入自訂角度 (預設 60) 調整 Game B 視角。</li>
-                    <li>調整旋轉/鏡像後，<b>差異圖會自動重新計算</b>，所見即所得。</li>
+                    <li>可輸入角度 (預設 60) 調整 Game B 的顯示方向。</li>
+                    <li>調整後，<b>右側差異圖會自動以「Game A」為基準，比較「調整後的 Game B」</b>，讓您直覺看出對齊後的差異。</li>
                 </ul>
             </p>
         </div>
@@ -184,6 +183,8 @@
             
             <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
             <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
+            
+            <div id="diffStatus" style="font-size:0.85rem; color:#64748b; font-weight:normal; margin-left:auto;">(原始視角)</div>
         </div>
 
         <div id="compareContent"></div>
@@ -207,7 +208,7 @@
     const statusText = document.getElementById('statusText'), progressBar = document.getElementById('progressBar'), resultsList = document.getElementById('resultsList'), addGroupBtn = document.getElementById('addGroupBtn');
     const thresholdRange = document.getElementById('thresholdRange'), thresholdValue = document.getElementById('thresholdValue');
     const compareBar = document.getElementById('compareBar'), compareInfo = document.getElementById('compareInfo'), startCompareBtn = document.getElementById('startCompareBtn');
-    const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent');
+    const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
     const rotateStepInput = document.getElementById('rotateStepInput');
 
@@ -305,24 +306,29 @@
     startCompareBtn.addEventListener('click', () => {
         if (selectedGames.length !== 2) return;
         currentCompareRotation = 0; currentCompareMirror = false; 
+        updateDiffStatus();
         compareModal.style.display = 'flex';
         document.getElementById('compareTitle').innerText = `比對: Game ${selectedGames[0]} vs ${selectedGames[1]}`;
         renderComparisonResults();
     });
 
+    function updateDiffStatus() {
+        let status = [];
+        if (currentCompareRotation > 0) status.push(`旋轉 ${currentCompareRotation}°`);
+        if (currentCompareMirror) status.push(`鏡像`);
+        diffStatus.textContent = status.length > 0 ? ("(變換: " + status.join(" + ") + ")") : "(原始視角)";
+    }
+
     window.rotateCompareImage = function() {
         const step = parseInt(rotateStepInput.value) || 60;
         currentCompareRotation = (currentCompareRotation + step) % 360;
-        renderComparisonResults(); // 旋轉後立即重新渲染比較結果
+        updateDiffStatus(); renderComparisonResults();
     };
-    window.mirrorCompareImage = function() { 
-        currentCompareMirror = !currentCompareMirror; 
-        renderComparisonResults(); // 鏡像後立即重新渲染比較結果
-    };
+    window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
     async function renderComparisonResults() {
         const gA = selectedGames[0], gB = selectedGames[1];
-        compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在運算並產生差異圖...</div>';
+        compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在運算中...</div>';
         await new Promise(r => setTimeout(r, 20));
 
         const turnsA = Object.keys(gameData[gA]).map(Number), turnsB = Object.keys(gameData[gB]).map(Number);
@@ -340,11 +346,11 @@
                     const imgObjA = await loadImage(fA);
                     const imgObjB = await loadImage(fB);
                     
-                    // 1. 產生變換後的 Game B (用於顯示和計算差異)
+                    // 1. 變換 Game B 供中間欄位顯示
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
                     imgB_Html = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
 
-                    // 2. 直接使用變換後的 Canvas B 與 原始 A 進行差異計算
+                    // 2. 強制使用變換後的 B 與原始 A 進行比對
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
@@ -382,7 +388,7 @@
         ctx.putImageData(target, 0, 0); return new Promise(resolve => c.toBlob(resolve));
     }
 
-    // Helpers
+    // Helpers (Clustering, etc.)
     function performClustering(gameIds, signatures, threshold) { const groups = []; const visited = new Set(); for (let i=0; i<gameIds.length; i++) { if(visited.has(gameIds[i])) continue; const grp = {repId: gameIds[i], members:[gameIds[i]]}; visited.add(gameIds[i]); for(let j=i+1; j<gameIds.length; j++) { if(!visited.has(gameIds[j]) && isStrategySimilar(signatures[gameIds[i]], signatures[gameIds[j]], threshold)) { grp.members.push(gameIds[j]); visited.add(gameIds[j]); } } groups.push(grp); } return groups.sort((a,b)=>b.members.length-a.members.length); }
     function isStrategySimilar(sigA, sigB, threshold) { const len = Math.min(sigA.length, sigB.length); if(len===0) return false; for(let k=0; k<len; k++) { if(sigA[k].turn!==sigB[k].turn) continue; if(hammingDist(sigA[k].hash, sigB[k].hash) > threshold) return false; } return true; }
     function showImgModal(src, text) { document.getElementById('imgModal').style.display='flex'; modalImg.src=src; modalCaption.textContent=text; }
@@ -392,6 +398,7 @@
     function rotateCanvas(s,a) { if(a===0) return s; const c=document.createElement('canvas'); c.width=s.width; c.height=s.height; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.translate(c.width/2, c.height/2); x.rotate(a*Math.PI/180); x.drawImage(s, -c.width/2, -c.height/2); return c; }
     function calculateHash(c) { const s=16; const cv=document.createElement('canvas'); cv.width=s; cv.height=s; const x=cv.getContext('2d'); x.drawImage(c,0,0,s,s); const d=x.getImageData(0,0,s,s).data; let h=""; for(let i=0; i<d.length; i+=4) { const avg=(d[i]+d[i+1]+d[i+2])/3; if(avg>220) h+="0"; else if(d[i]>d[i+1]+30) h+="1"; else if(d[i+2]>d[i]+30) h+="2"; else h+="3"; } return h; }
     function hammingDist(s1, s2) { let d=0; for(let i=0; i<s1.length; i++) if(s1[i]!==s2[i]) d++; return d; }
+    
     downloadExcelBtn.addEventListener('click', () => { const data = []; clusteredGroups.forEach((g,i) => g.members.forEach(id => data.push({"策略群組":`Pattern ${i+1}`,"賽局 ID":`Game ${id}`,"同組成員數":g.members.length}))); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb, ws, "分類結果"); XLSX.writeFile(wb, `Game_Analysis_Final.xlsx`); });
     downloadZipBtn.addEventListener('click', async () => { downloadZipBtn.disabled = true; const zip = new JSZip(); for(let i=0; i<clusteredGroups.length; i++) { const g = clusteredGroups[i]; const pf = zip.folder(`Pattern_${i+1}_(Count_${g.members.length})`); g.members.forEach(gid => { if(gameData[gid]) { const gf = pf.folder(`Game_${gid}`); Object.values(gameData[gid]).forEach(f => gf.file(f.name, f)); }}); } try { const c = await zip.generateAsync({type:"blob"}); saveAs(c, `Classified_Games.zip`); } catch(e){} finally { downloadZipBtn.disabled = false; } });
 </script>
