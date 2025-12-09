@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 Pro (進階比對版)</title>
+    <title>AI 賽局演變分析器 Pro (自訂角度版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -88,12 +88,15 @@
         .modal-content { background: white; width: 95%; max-width: 1000px; max-height: 90vh; border-radius: 20px; padding: 30px; overflow-y: auto; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Diff Styles & Toolbar */
-        .diff-toolbar { display: flex; gap: 15px; margin-bottom: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px; align-items: center;}
+        /* Diff Toolbar */
+        .diff-toolbar { display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px; align-items: center; flex-wrap: wrap;}
         .diff-btn { background: white; border: 1px solid #cbd5e1; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; transition:0.2s;}
         .diff-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
         .diff-status { font-size: 0.9rem; color: var(--text-light); font-weight: bold; margin-left: auto;}
         
+        .angle-input { width: 60px; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-weight: bold; color: var(--text-main); }
+        .angle-input:focus { outline: none; border-color: var(--primary); }
+
         .diff-grid { display: grid; grid-template-columns: 80px 1fr 1fr 1fr; gap: 15px; border-bottom: 1px solid #eee; padding: 15px 0; align-items: center; }
         .diff-header { font-weight: bold; color: var(--text-light); text-align: center; background: #f8fafc; padding: 10px; border-radius: 8px; }
         .diff-img-wrap { text-align: center; }
@@ -107,7 +110,7 @@
     <header>
         <button class="btn-help" onclick="showHelp()" title="使用說明">?</button>
         <h1>AI 賽局演變分析器 <span style="font-size:0.5em; vertical-align:middle; background:var(--text-main); color:white; padding:4px 8px; border-radius:6px;">Pro</span></h1>
-        <p class="desc">智慧分類・人機協作・精準比對 (支援旋轉/鏡像)</p>
+        <p class="desc">智慧分類・人機協作・精準比對 (自訂旋轉)</p>
     </header>
 
     <div id="helpModal" class="modal-overlay" onclick="if(event.target===this)closeModal('helpModal')">
@@ -119,7 +122,7 @@
             <p>1. <b>上傳</b>：拖曳 Game_X_Turn_Y 圖片。</p>
             <p>2. <b>分析</b>：點擊開始分析，可調整嚴格度滑桿重算。</p>
             <p>3. <b>修正</b>：按住卡片標題旁的 <code>⋮⋮</code> 圖示可拖曳分類。</p>
-            <p>4. <b>比對</b>：選取兩局後點擊比對。在比對視窗中，可使用工具列旋轉或鏡像第二局圖片，以校正視角差異。</p>
+            <p>4. <b>比對</b>：選取兩局後點擊比對。可輸入「每次旋轉度數」(預設 60) 來調整 Game B 的視角。</p>
         </div>
     </div>
 
@@ -165,9 +168,13 @@
         </div>
         
         <div class="diff-toolbar">
-            <span>調整 Game B 視角：</span>
-            <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉 90°</button>
-            <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像翻轉</button>
+            <span>每次旋轉:</span>
+            <input type="number" id="rotateStepInput" value="60" min="1" max="180" class="angle-input">
+            <span style="font-size:0.9rem; margin-right:10px;">度</span>
+            
+            <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
+            <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
+            
             <span id="diffStatus" class="diff-status">目前狀態: 原始</span>
         </div>
 
@@ -194,11 +201,10 @@
     const compareBar = document.getElementById('compareBar'), compareInfo = document.getElementById('compareInfo'), startCompareBtn = document.getElementById('startCompareBtn');
     const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
+    const rotateStepInput = document.getElementById('rotateStepInput');
 
     let uploadedFiles = [], clusteredGroups = [], gameData = {}, gameSignatures = {}, gameIds = [], selectedGames = [];
     const IMG_SIZE = 150, ANGLES = [0, 60, 120, 180, 240, 300];
-
-    // --- 比對變換狀態 ---
     let currentCompareRotation = 0;
     let currentCompareMirror = false;
 
@@ -288,19 +294,14 @@
     }
     window.clearComparison = function() { selectedGames = []; renderExpandedGroups(clusteredGroups); updateCompareBar(); };
 
-    // --- 進階比對功能 ---
     startCompareBtn.addEventListener('click', () => {
         if (selectedGames.length !== 2) return;
-        // 重置變換狀態
-        currentCompareRotation = 0;
-        currentCompareMirror = false;
-        updateDiffStatus();
+        currentCompareRotation = 0; currentCompareMirror = false; updateDiffStatus();
         compareModal.style.display = 'flex';
         document.getElementById('compareTitle').innerText = `比對: Game ${selectedGames[0]} vs ${selectedGames[1]}`;
-        renderComparisonResults(); // 開始渲染
+        renderComparisonResults();
     });
 
-    // 更新狀態文字
     function updateDiffStatus() {
         let status = [];
         if (currentCompareRotation > 0) status.push(`旋轉 ${currentCompareRotation}°`);
@@ -308,44 +309,31 @@
         diffStatus.textContent = "目前狀態: " + (status.length > 0 ? status.join(" + ") : "原始");
     }
 
-    // 按鈕事件處理
     window.rotateCompareImage = function() {
-        currentCompareRotation = (currentCompareRotation + 90) % 360;
-        updateDiffStatus();
-        renderComparisonResults(); // 重新渲染
+        // 從輸入框讀取自訂角度
+        const step = parseInt(rotateStepInput.value) || 60;
+        currentCompareRotation = (currentCompareRotation + step) % 360;
+        updateDiffStatus(); renderComparisonResults();
     };
-    window.mirrorCompareImage = function() {
-        currentCompareMirror = !currentCompareMirror;
-        updateDiffStatus();
-        renderComparisonResults(); // 重新渲染
-    };
+    window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
-    // 核心渲染函式
     async function renderComparisonResults() {
         const gA = selectedGames[0], gB = selectedGames[1];
         compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在應用變換並計算差異...</div>';
-        await new Promise(r => setTimeout(r, 50)); // 讓 UI 更新
-
+        await new Promise(r => setTimeout(r, 50));
         const turnsA = Object.keys(gameData[gA]).map(Number), turnsB = Object.keys(gameData[gB]).map(Number);
         const allTurns = Array.from(new Set([...turnsA, ...turnsB])).sort((a,b)=>a-b);
         let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>Game ${gB} (變換後)</div><div style="color:var(--secondary);">差異 (Diff)</div></div>`;
-
         for (let t of allTurns) {
             const fA = gameData[gA][t], fB = gameData[gB][t];
             let imgA = fA ? `<img src="${URL.createObjectURL(fA)}">` : '<span style="color:#ccc">無</span>';
             let imgB_TransformedHtml = '<span style="color:#ccc">無</span>';
             let diffHtml = '<span style="color:#ccc">-</span>';
-
             if(fA && fB) {
                 try {
-                    const imgObjA = await loadImage(fA);
-                    const imgObjB = await loadImage(fB);
-                    
-                    // 1. 建立變換後的 B 圖 Canvas
+                    const imgObjA = await loadImage(fA); const imgObjB = await loadImage(fB);
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
-                    imgB_TransformedHtml = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`; // 顯示變換後的圖
-
-                    // 2. 生成 Diff (使用 A 和 變換後的 B)
+                    imgB_TransformedHtml = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
@@ -355,53 +343,33 @@
         compareContent.innerHTML = html;
     }
 
-    // --- 新增：建立變換後 Canvas 的輔助函式 ---
     function createTransformedCanvas(sourceImg, angle, mirror) {
         const canvas = document.createElement('canvas');
-        const isVertical = angle === 90 || angle === 270;
-        // 如果旋轉 90/270 度，畫布寬高要互換
-        canvas.width = isVertical ? sourceImg.height : sourceImg.width;
-        canvas.height = isVertical ? sourceImg.width : sourceImg.height;
+        // 對於非 90/180/270 的角度，這裡的畫布大小計算可能需要更複雜的三角函數，
+        // 但為了簡化且適應六邊形遊戲通常是正方形圖片，這裡暫時維持正方形邏輯
+        canvas.width = sourceImg.width; canvas.height = sourceImg.height;
         const ctx = canvas.getContext('2d');
-
-        ctx.save();
-        // 移到中心點
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        // 應用鏡像
+        ctx.save(); ctx.translate(canvas.width / 2, canvas.height / 2);
         if (mirror) ctx.scale(-1, 1);
-        // 應用旋轉
         ctx.rotate(angle * Math.PI / 180);
-        // 繪製圖片 (注意要扣除自身寬高的一半來置中)
         ctx.drawImage(sourceImg, -sourceImg.width / 2, -sourceImg.height / 2);
-        ctx.restore();
-        return canvas;
+        ctx.restore(); return canvas;
     }
 
-    // 修改後的 Diff 生成 (支援傳入 Canvas)
     async function generateDiffImage(img1, canvas2) {
         const w = Math.max(img1.width, canvas2.width), h = Math.max(img1.height, canvas2.height);
         const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
         ctx.drawImage(img1, 0, 0, w, h); const d1 = ctx.getImageData(0,0,w,h);
-        
-        // 直接從傳入的 transformed canvas 取得資料
-        const ctx2 = canvas2.getContext('2d');
-        const d2 = ctx2.getImageData(0,0,w,h);
-
+        const ctx2 = canvas2.getContext('2d'); const d2 = ctx2.getImageData(0,0,w,h);
         const target = ctx.createImageData(w, h);
         for (let i=0; i<d1.data.length; i+=4) {
-            const r1=d1.data[i], g1=d1.data[i+1], b1=d1.data[i+2];
-            const r2=d2.data[i], g2=d2.data[i+1], b2=d2.data[i+2];
-            if (Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2) > 30) {
-                target.data[i]=236; target.data[i+1]=72; target.data[i+2]=153; target.data[i+3]=255;
-            } else {
-                const gray = (r1+g1+b1)/3; target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50;
-            }
+            const r1=d1.data[i], g1=d1.data[i+1], b1=d1.data[i+2]; const r2=d2.data[i], g2=d2.data[i+1], b2=d2.data[i+2];
+            if (Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2) > 30) { target.data[i]=236; target.data[i+1]=72; target.data[i+2]=153; target.data[i+3]=255; }
+            else { const gray = (r1+g1+b1)/3; target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; }
         }
-        ctx.putImageData(target, 0, 0);
-        return new Promise(resolve => c.toBlob(resolve));
+        ctx.putImageData(target, 0, 0); return new Promise(resolve => c.toBlob(resolve));
     }
 
-    // --- 其他輔助函式 (保持不變) ---
     function performClustering(gameIds, signatures, threshold) { const groups = []; const visited = new Set(); for (let i=0; i<gameIds.length; i++) { if(visited.has(gameIds[i])) continue; const grp = {repId: gameIds[i], members:[gameIds[i]]}; visited.add(gameIds[i]); for(let j=i+1; j<gameIds.length; j++) { if(!visited.has(gameIds[j]) && isStrategySimilar(signatures[gameIds[i]], signatures[gameIds[j]], threshold)) { grp.members.push(gameIds[j]); visited.add(gameIds[j]); } } groups.push(grp); } return groups.sort((a,b)=>b.members.length-a.members.length); }
     function isStrategySimilar(sigA, sigB, threshold) { const len = Math.min(sigA.length, sigB.length); if(len===0) return false; for(let k=0; k<len; k++) { if(sigA[k].turn!==sigB[k].turn) continue; if(hammingDist(sigA[k].hash, sigB[k].hash) > threshold) return false; } return true; }
     function showImgModal(src, text) { document.getElementById('imgModal').style.display='flex'; modalImg.src=src; modalCaption.textContent=text; }
