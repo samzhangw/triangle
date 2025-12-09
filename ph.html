@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 賽局演變分析器 (多層資料夾版)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        :root { --primary: #0ea5e9; --bg: #f1f5f9; --card-bg: #ffffff; --text: #334155; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 30px; color: var(--text); }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        h1 { text-align: center; color: var(--primary); margin-bottom: 10px; }
+        .desc { text-align: center; color: #64748b; margin-bottom: 30px; }
+
+        /* 上傳區 */
+        .upload-area {
+            background: var(--card-bg); border: 2px dashed #cbd5e1; border-radius: 12px; 
+            padding: 2rem; text-align: center; cursor: pointer; transition: 0.2s;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover { border-color: var(--primary); background: #e0f2fe; }
+        
+        /* 按鈕區 */
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; flex-wrap: wrap;}
+        
+        button {
+            padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; 
+            color: white; font-weight: 600; background: var(--primary); transition: 0.2s;
+            font-size: 1rem; display: flex; align-items: center; gap: 8px;
+        }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
+
+        .btn-excel { background: #10b981; display: none; } /* 綠色 */
+        .btn-zip { background: #8b5cf6; display: none; }   /* 紫色 */
+
+        /* 結果列表 */
+        .results-list { display: flex; flex-direction: column; gap: 40px; }
+
+        /* 群組卡片 */
+        .group-card {
+            background: var(--card-bg); border-radius: 16px; padding: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-top: 6px solid var(--primary);
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        .group-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; 
+        }
+        .group-title { font-weight: 700; font-size: 1.5rem; color: #0f172a; }
+        .group-count { background: #e0f2fe; color: var(--primary); padding: 5px 12px; border-radius: 20px; font-weight: bold; }
+
+        .game-row {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 20px; margin-bottom: 20px;
+        }
+        .game-label {
+            font-weight: 700; font-size: 1.1rem; color: var(--primary);
+            margin-bottom: 15px; display: flex; align-items: center; gap: 8px;
+        }
+        .game-label::before { content: "♟️"; font-size: 1.2rem; }
+
+        /* 時間軸 */
+        .timeline-container {
+            display: flex; align-items: flex-start; gap: 8px; 
+            overflow-x: auto; padding-bottom: 10px;
+        }
+        .timeline-container::-webkit-scrollbar { height: 8px; }
+        .timeline-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .timeline-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+        .step-item {
+            flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+            width: 110px; position: relative;
+        }
+        
+        .step-img {
+            width: 100%; height: 110px; object-fit: contain; 
+            border: 1px solid #cbd5e1; border-radius: 6px; background: white;
+            transition: transform 0.2s; cursor: zoom-in;
+        }
+        .step-img:hover { transform: scale(1.05); border-color: var(--primary); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+        .step-label {
+            margin-top: 6px; font-size: 0.8rem; font-weight: 600; 
+            color: #64748b; background: #fff; padding: 2px 8px; border-radius: 10px; border: 1px solid #e2e8f0;
+        }
+
+        .arrow-separator {
+            flex: 0 0 auto; display: flex; align-items: center; height: 110px;
+            color: #cbd5e1; font-size: 1.2rem; font-weight: bold;
+        }
+
+        /* 燈箱效果 */
+        .modal {
+            display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); align-items: center; justify-content: center; flex-direction: column;
+        }
+        .modal img { max-width: 90%; max-height: 80vh; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        .modal-caption { color: white; margin-top: 15px; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px;}
+        .modal-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; cursor: pointer; }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>AI 賽局演變分析器 (多層結構版)</h1>
+    <p class="desc">智慧分類策略，支援 Excel 報表與多層資料夾圖片包下載</p>
+
+    <div class="upload-area" id="dropZone">
+        <h3>📂 拖曳圖片到這裡</h3>
+        <p>請全選所有 Game_XXX_Turn_YYY 圖片</p>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+    </div>
+
+    <div class="controls">
+        <button id="analyzeBtn" disabled>🚀 開始分析</button>
+        <button id="downloadExcelBtn" class="btn-excel">📊 下載報表</button>
+        <button id="downloadZipBtn" class="btn-zip">🗂️ 下載分類圖檔 (ZIP)</button>
+    </div>
+    
+    <div id="statusLog" style="text-align: center; color: #64748b; margin-bottom: 20px;">準備就緒</div>
+    <div id="resultsList" class="results-list"></div>
+</div>
+
+<div id="imgModal" class="modal" onclick="if(event.target===this)this.style.display='none'">
+    <span class="modal-close" onclick="document.getElementById('imgModal').style.display='none'">&times;</span>
+    <img id="modalImg">
+    <div id="modalCaption" class="modal-caption"></div>
+</div>
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+    const downloadZipBtn = document.getElementById('downloadZipBtn');
+    const statusLog = document.getElementById('statusLog');
+    const resultsList = document.getElementById('resultsList');
+    const modal = document.getElementById('imgModal');
+    const modalImg = document.getElementById('modalImg');
+    const modalCaption = document.getElementById('modalCaption');
+
+    let uploadedFiles = [];
+    let clusteredGroups = []; 
+    let gameData = {}; 
+    const IMG_SIZE = 150;
+    const ANGLES = [0, 60, 120, 180, 240, 300];
+
+    // --- 檔案處理 ---
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = '#e0f2fe'; });
+    dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.background = '#ffffff'; handleFiles(e.dataTransfer.files); });
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+        const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+        if (!imgs.length) return;
+        uploadedFiles = [...uploadedFiles, ...imgs];
+        statusLog.textContent = `已載入 ${uploadedFiles.length} 張圖片`;
+        analyzeBtn.disabled = false;
+        resultsList.innerHTML = '';
+        downloadExcelBtn.style.display = 'none';
+        downloadZipBtn.style.display = 'none';
+    }
+
+    // --- 分析流程 ---
+    analyzeBtn.addEventListener('click', async () => {
+        analyzeBtn.disabled = true;
+        downloadExcelBtn.style.display = 'none';
+        downloadZipBtn.style.display = 'none';
+        statusLog.textContent = "正在解析棋局結構...";
+        resultsList.innerHTML = '';
+
+        // 1. 整理資料
+        gameData = {};
+        uploadedFiles.forEach(file => {
+            const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i);
+            if (match) {
+                const gId = match[1];
+                const tId = parseInt(match[2]);
+                if (!gameData[gId]) gameData[gId] = {};
+                gameData[gId][tId] = file;
+            }
+        });
+
+        const gameIds = Object.keys(gameData).sort();
+        if (gameIds.length === 0) {
+            alert("找不到符合格式的圖片");
+            analyzeBtn.disabled = false;
+            return;
+        }
+
+        // 2. 計算指紋
+        statusLog.textContent = "正在計算策略特徵...";
+        const gameSignatures = {};
+        for (let gId of gameIds) {
+            const turns = Object.keys(gameData[gId]).map(Number).sort((a,b)=>a-b);
+            const signature = [];
+            for (let t of turns) {
+                const img = await loadImage(gameData[gId][t]);
+                const hash = await getRotatedHash(img);
+                signature.push({ turn: t, hash: hash });
+            }
+            gameSignatures[gId] = signature;
+        }
+
+        // 3. 分群
+        statusLog.textContent = "正在歸類策略...";
+        clusteredGroups = performClustering(gameIds, gameSignatures);
+
+        // 4. 渲染結果
+        renderExpandedGroups(clusteredGroups);
+        
+        statusLog.textContent = `分析完成！共 ${clusteredGroups.length} 種策略模式。`;
+        analyzeBtn.disabled = false;
+        downloadExcelBtn.style.display = 'flex';
+        downloadZipBtn.style.display = 'flex';
+    });
+
+    // --- 下載 Excel ---
+    downloadExcelBtn.addEventListener('click', () => {
+        const excelData = [];
+        clusteredGroups.forEach((group, index) => {
+            const patternName = `Pattern ${index + 1}`;
+            group.members.forEach(gameId => {
+                excelData.push({
+                    "策略群組": patternName,
+                    "賽局 ID": `Game ${gameId}`,
+                    "同組成員數": group.members.length,
+                    "代表賽局": group.repId === gameId ? "是" : ""
+                });
+            });
+        });
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wscols = [{wch: 15}, {wch: 15}, {wch: 12}, {wch: 10}];
+        ws['!cols'] = wscols;
+        XLSX.utils.book_append_sheet(wb, ws, "分類結果");
+        XLSX.writeFile(wb, `Game_Analysis_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+
+    // --- 下載 ZIP (巢狀結構版) ---
+    downloadZipBtn.addEventListener('click', async () => {
+        downloadZipBtn.disabled = true;
+        downloadZipBtn.textContent = "⏳ 打包中...";
+        const zip = new JSZip();
+        
+        // 1. 遍歷每一個策略群組 (Layer 1: Pattern)
+        clusteredGroups.forEach((group, index) => {
+            const patternFolderName = `Pattern_${index + 1}_(Count_${group.members.length})`;
+            const patternFolder = zip.folder(patternFolderName);
+            
+            // 2. 遍歷群組內的每一場賽局 (Layer 2: Game)
+            group.members.forEach(gameId => {
+                if(gameData[gameId]) {
+                    // 建立以 Game ID 命名的子資料夾
+                    const gameFolderName = `Game_${gameId}`;
+                    const gameFolder = patternFolder.folder(gameFolderName);
+
+                    // 3. 將該局的圖片放入該子資料夾
+                    Object.values(gameData[gameId]).forEach(file => {
+                        gameFolder.file(file.name, file);
+                    });
+                }
+            });
+        });
+
+        // 產生 ZIP 並下載
+        try {
+            const content = await zip.generateAsync({type: "blob"});
+            saveAs(content, `Nested_Classified_Games_${new Date().toISOString().slice(0,10)}.zip`);
+            statusLog.textContent = "ZIP 打包下載完成！";
+        } catch (err) {
+            console.error(err);
+            statusLog.textContent = "ZIP 打包失敗，請檢查 console";
+        } finally {
+            downloadZipBtn.disabled = false;
+            downloadZipBtn.textContent = "🗂️ 下載分類圖檔 (ZIP)";
+        }
+    });
+
+    // --- 演算法 ---
+    function performClustering(gameIds, signatures) {
+        const groups = [];
+        const visited = new Set();
+        const THRESHOLD = 5;
+
+        for (let i = 0; i < gameIds.length; i++) {
+            const currentId = gameIds[i];
+            if (visited.has(currentId)) continue;
+            const newGroup = { repId: currentId, members: [currentId] };
+            visited.add(currentId);
+
+            for (let j = i + 1; j < gameIds.length; j++) {
+                const targetId = gameIds[j];
+                if (visited.has(targetId)) continue;
+                if (isStrategySimilar(signatures[currentId], signatures[targetId], THRESHOLD)) {
+                    newGroup.members.push(targetId);
+                    visited.add(targetId);
+                }
+            }
+            groups.push(newGroup);
+        }
+        return groups.sort((a,b) => b.members.length - a.members.length);
+    }
+
+    function isStrategySimilar(sigA, sigB, threshold) {
+        const len = Math.min(sigA.length, sigB.length);
+        if (len === 0) return false;
+        for (let k = 0; k < len; k++) {
+            if (sigA[k].turn !== sigB[k].turn) continue;
+            if (hammingDist(sigA[k].hash, sigB[k].hash) > threshold) return false;
+        }
+        return true;
+    }
+
+    // --- 渲染 ---
+    function renderExpandedGroups(groups) {
+        resultsList.innerHTML = '';
+        groups.forEach((group, idx) => {
+            const groupCard = document.createElement('div');
+            groupCard.className = 'group-card';
+            
+            groupCard.innerHTML = `
+                <div class="group-header">
+                    <div class="group-title">策略模式 ${idx + 1}</div>
+                    <span class="group-count">包含 ${group.members.length} 局</span>
+                </div>
+            `;
+            
+            group.members.forEach(gameId => {
+                const turns = Object.keys(gameData[gameId]).map(Number).sort((a,b)=>a-b);
+                let timelineHtml = '<div class="timeline-container">';
+                turns.forEach((turn, tIdx) => {
+                    const imgUrl = URL.createObjectURL(gameData[gameId][turn]);
+                    if (tIdx > 0) timelineHtml += `<div class="arrow-separator">→</div>`;
+                    timelineHtml += `
+                        <div class="step-item">
+                            <img src="${imgUrl}" class="step-img" 
+                                 onclick="showModal('${imgUrl}', 'Game ${gameId} - Turn ${turn}')">
+                            <div class="step-label">Turn ${turn}</div>
+                        </div>
+                    `;
+                });
+                timelineHtml += '</div>';
+
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'game-row';
+                rowDiv.innerHTML = `
+                    <div class="game-label">Game ${gameId}</div>
+                    ${timelineHtml}
+                `;
+                groupCard.appendChild(rowDiv);
+            });
+
+            resultsList.appendChild(groupCard);
+        });
+    }
+
+    function showModal(src, text) {
+        modal.style.display = 'flex';
+        modalImg.src = src;
+        modalCaption.textContent = text;
+    }
+
+    // --- 影像處理函式 ---
+    function loadImage(file) {
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = URL.createObjectURL(file);
+        });
+    }
+    function getRotatedHash(img) {
+        const canvas = preprocessImage(img);
+        let minHash = null;
+        for (let angle of ANGLES) {
+            const rotCanvas = rotateCanvas(canvas, angle);
+            const hash = calculateHash(rotCanvas);
+            if (minHash === null || hash < minHash) minHash = hash;
+        }
+        return minHash;
+    }
+    function preprocessImage(img) {
+        const size = IMG_SIZE;
+        const cvs = document.createElement('canvas');
+        cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+        const scale = Math.min(size/img.naturalWidth, size/img.naturalHeight) * 0.9;
+        const w = img.naturalWidth * scale;
+        const h = img.naturalHeight * scale;
+        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+        return cvs;
+    }
+    function rotateCanvas(source, angle) {
+        if (angle === 0) return source;
+        const cvs = document.createElement('canvas');
+        cvs.width = source.width; cvs.height = source.height;
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.translate(cvs.width/2, cvs.height/2);
+        ctx.rotate(angle * Math.PI / 180);
+        ctx.drawImage(source, -cvs.width/2, -cvs.height/2);
+        return cvs;
+    }
+    function calculateHash(canvas) {
+        const size = 16; 
+        const cvs = document.createElement('canvas');
+        cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d');
+        ctx.drawImage(canvas, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+        let hash = "";
+        for(let i=0; i<data.length; i+=4) {
+            const r=data[i], g=data[i+1], b=data[i+2];
+            if ((r+g+b)/3 > 220) hash += "0"; 
+            else if (r > g+30 && r > b+30) hash += "1";
+            else if (b > r+30 && b > g+30) hash += "2";
+            else hash += "3";
+        }
+        return hash;
+    }
+    function hammingDist(s1, s2) {
+        let d = 0;
+        for(let i=0; i<s1.length; i++) if(s1[i]!==s2[i]) d++;
+        return d;
+    }
+</script>
+</body>
+</html>
