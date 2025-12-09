@@ -3,110 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 (含圖片分類打包)</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>AI 賽局演變分析器 (Diff 比對版)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
-        :root { --primary: #0ea5e9; --bg: #f1f5f9; --card-bg: #ffffff; --text: #334155; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 30px; color: var(--text); }
-        .container { max-width: 1400px; margin: 0 auto; }
-        
-        h1 { text-align: center; color: var(--primary); margin-bottom: 10px; }
-        .desc { text-align: center; color: #64748b; margin-bottom: 30px; }
+        :root { 
+            --primary: #3b82f6; --primary-dark: #2563eb; --success: #10b981; --purple: #8b5cf6; --danger: #ef4444;
+            --bg: #f0f4f8; --card-bg: #ffffff; --text-main: #1e293b; --text-sec: #64748b;
+        }
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background: var(--bg); padding: 40px 20px 100px 20px; color: var(--text-main); line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        header { text-align: center; margin-bottom: 40px; }
+        h1 { 
+            font-size: 2.5rem; margin-bottom: 10px; font-weight: 800;
+            background: linear-gradient(45deg, #2563eb, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
 
         /* 上傳區 */
         .upload-area {
-            background: var(--card-bg); border: 2px dashed #cbd5e1; border-radius: 12px; 
-            padding: 2rem; text-align: center; cursor: pointer; transition: 0.2s;
-            margin-bottom: 20px;
+            background: var(--card-bg); border: 3px dashed #cbd5e1; border-radius: 20px; 
+            padding: 3rem; text-align: center; cursor: pointer; transition: all 0.3s ease; margin-bottom: 30px;
         }
-        .upload-area:hover { border-color: var(--primary); background: #e0f2fe; }
-        
-        /* 按鈕區 */
-        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; flex-wrap: wrap;}
-        
-        button {
-            padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; 
-            color: white; font-weight: 600; background: var(--primary); transition: 0.2s;
-            font-size: 1rem; display: flex; align-items: center; gap: 8px;
-        }
-        button:disabled { background: #94a3b8; cursor: not-allowed; }
-        button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
+        .upload-area:hover { border-color: var(--primary); background: #eff6ff; transform: translateY(-2px); }
+        .upload-icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
 
-        /* 不同功能的按鈕顏色 */
-        .btn-excel { background: #10b981; display: none; } /* 綠色：Excel */
-        .btn-zip { background: #8b5cf6; display: none; }   /* 紫色：ZIP */
+        /* 設定面板 */
+        .settings-panel {
+            background: white; padding: 20px 30px; border-radius: 16px; margin-bottom: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; gap: 20px;
+            border: 1px solid #e2e8f0;
+        }
+        .slider-container { display: flex; align-items: center; gap: 15px; flex: 1; max-width: 500px; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--primary); }
+        .slider-value { 
+            background: var(--primary); color: white; padding: 2px 10px; border-radius: 12px; 
+            font-size: 0.9rem; font-weight: bold; min-width: 30px; text-align: center;
+        }
+
+        /* 按鈕群 */
+        .controls { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+        button {
+            padding: 12px 28px; border: none; border-radius: 12px; cursor: pointer; 
+            color: white; font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 8px;
+            transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
+        button:disabled { background: #cbd5e1; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+        
+        .btn-analyze { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .btn-excel { background: linear-gradient(135deg, #10b981 0%, #059669 100%); display: none; }
+        .btn-zip { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); display: none; }
+        .btn-recalc { background: #64748b; display: none; }
+
+        /* 進度條 */
+        .status-container { margin-bottom: 40px; text-align: center; display: none; }
+        .progress-wrapper {
+            background: #e2e8f0; border-radius: 10px; height: 12px; width: 100%; max-width: 600px;
+            margin: 15px auto; overflow: hidden; position: relative;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, var(--primary), var(--purple));
+            height: 100%; width: 0%; border-radius: 10px; transition: width 0.3s ease-out;
+        }
 
         /* 結果列表 */
-        .results-list { display: flex; flex-direction: column; gap: 40px; }
-
-        /* 群組卡片 */
+        .results-list { display: flex; flex-direction: column; gap: 30px; }
         .group-card {
-            background: var(--card-bg); border-radius: 16px; padding: 30px;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-top: 6px solid var(--primary);
-            animation: slideIn 0.5s ease-out;
+            background: var(--card-bg); border-radius: 20px; padding: 30px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; animation: slideIn 0.5s ease-out;
         }
-        
-        .group-header { 
-            display: flex; justify-content: space-between; align-items: center; 
-            margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; 
-        }
-        .group-title { font-weight: 700; font-size: 1.5rem; color: #0f172a; }
-        .group-count { background: #e0f2fe; color: var(--primary); padding: 5px 12px; border-radius: 20px; font-weight: bold; }
+        .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
+        .group-title { font-weight: 800; font-size: 1.5rem; color: #0f172a; }
+        .group-badge { background: #eff6ff; color: var(--primary); padding: 6px 16px; border-radius: 99px; font-weight: 700; font-size: 0.9rem; }
 
-        .game-row {
-            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
-            padding: 20px; margin-bottom: 20px;
+        .game-row { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 20px; position: relative; transition: border-color 0.2s; }
+        .game-row.selected-for-compare { border: 2px solid var(--purple); background: #f3e8ff; }
+
+        .game-header-bar {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
         }
         .game-label {
-            font-weight: 700; font-size: 1.1rem; color: var(--primary);
-            margin-bottom: 15px; display: flex; align-items: center; gap: 8px;
+            background: var(--primary); color: white; padding: 4px 12px; 
+            border-radius: 6px; font-weight: 600; font-size: 0.9rem;
         }
-        .game-label::before { content: "♟️"; font-size: 1.2rem; }
+        /* 比對按鈕樣式 */
+        .btn-compare-toggle {
+            background: white; color: var(--text-sec); border: 1px solid #cbd5e1;
+            padding: 4px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;
+            display: flex; align-items: center; gap: 5px; box-shadow: none;
+        }
+        .btn-compare-toggle:hover { background: #f1f5f9; transform: none; }
+        .btn-compare-toggle.active { background: var(--purple); color: white; border-color: var(--purple); }
 
-        /* 時間軸 */
-        .timeline-container {
-            display: flex; align-items: flex-start; gap: 8px; 
-            overflow-x: auto; padding-bottom: 10px;
-        }
-        .timeline-container::-webkit-scrollbar { height: 8px; }
-        .timeline-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        .timeline-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-
-        .step-item {
-            flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
-            width: 110px; position: relative;
-        }
-        
+        .timeline-container { display: flex; align-items: flex-start; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
+        .step-item { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; width: 120px; }
         .step-img {
-            width: 100%; height: 110px; object-fit: contain; 
-            border: 1px solid #cbd5e1; border-radius: 6px; background: white;
-            transition: transform 0.2s; cursor: zoom-in;
+            width: 100%; height: 120px; object-fit: contain; border: 2px solid #e2e8f0; border-radius: 10px; background: white;
+            transition: all 0.2s; cursor: zoom-in;
         }
-        .step-img:hover { transform: scale(1.05); border-color: var(--primary); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .step-img:hover { transform: scale(1.08); border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .arrow-separator { flex: 0 0 auto; display: flex; align-items: center; height: 120px; color: #cbd5e1; font-size: 1.5rem; }
 
-        .step-label {
-            margin-top: 6px; font-size: 0.8rem; font-weight: 600; 
-            color: #64748b; background: #fff; padding: 2px 8px; border-radius: 10px; border: 1px solid #e2e8f0;
+        /* 浮動比對列 */
+        .floating-compare-bar {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(200%);
+            background: #1e293b; color: white; padding: 15px 30px; border-radius: 50px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 20px;
+            z-index: 100; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        .floating-compare-bar.show { transform: translateX(-50%) translateY(0); }
+        .btn-start-compare { background: var(--purple); padding: 8px 20px; border-radius: 20px; font-size: 0.9rem; }
 
-        .arrow-separator {
-            flex: 0 0 auto; display: flex; align-items: center; height: 110px;
-            color: #cbd5e1; font-size: 1.2rem; font-weight: bold;
+        /* 比對 Modal */
+        .compare-modal {
+            display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
+            background: white; overflow-y: auto;
         }
+        .compare-container { max-width: 1400px; margin: 40px auto; padding: 0 20px; }
+        .compare-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
+        .compare-row { display: grid; grid-template-columns: 100px 1fr 1fr 1fr; gap: 20px; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; }
+        .compare-col-header { font-weight: bold; text-align: center; color: var(--text-sec); margin-bottom: 10px; }
+        .diff-img-box { text-align: center; }
+        .diff-img { width: 100%; max-width: 300px; border: 1px solid #e2e8f0; border-radius: 8px; }
+        .diff-label { margin-top: 5px; font-size: 0.85rem; color: #64748b; font-weight: 600; }
+        .diff-highlight { border: 2px solid var(--danger); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
 
-        /* 燈箱效果 */
+        /* 一般 Modal */
         .modal {
-            display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.95); align-items: center; justify-content: center; flex-direction: column;
+            display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(5px); align-items: center; justify-content: center; flex-direction: column;
         }
-        .modal img { max-width: 90%; max-height: 80vh; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
-        .modal-caption { color: white; margin-top: 15px; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px;}
-        .modal-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; cursor: pointer; }
+        .modal img { max-width: 90%; max-height: 80vh; border-radius: 12px; }
+        .modal-caption { color: white; margin-top: 20px; font-size: 1.1rem; background: rgba(255,255,255,0.1); padding: 8px 20px; border-radius: 30px;}
+        .modal-close { position: absolute; top: 30px; right: 40px; color: white; font-size: 40px; cursor: pointer; }
 
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -114,23 +148,59 @@
 <body>
 
 <div class="container">
-    <h1>AI 賽局演變分析器</h1>
-    <p class="desc">智慧分類策略，支援 Excel 報表與分類圖片包下載</p>
+    <header>
+        <h1>AI 賽局演變分析器 <span style="font-size:1rem; vertical-align:middle; background:#8b5cf6; color:white; padding:4px 8px; border-radius:6px;">Diff版</span></h1>
+        <p class="desc">智慧分類・靈敏度微調・差異比對</p>
+    </header>
+
+    <div class="settings-panel">
+        <div class="slider-container">
+            <span class="slider-label">🤖 AI 判定寬鬆度：</span>
+            <input type="range" id="thresholdRange" min="0" max="15" value="5" step="1">
+            <span class="slider-value" id="thresholdValue">5</span>
+        </div>
+        <div style="font-size: 0.85rem; color: #64748b;">數值越小=越嚴格</div>
+    </div>
 
     <div class="upload-area" id="dropZone">
-        <h3>📂 拖曳圖片到這裡</h3>
-        <p>請全選所有 Game_XXX_Turn_YYY 圖片</p>
+        <span class="upload-icon">📂</span>
+        <h3>拖曳圖片或點擊上傳</h3>
+        <p style="color: #94a3b8; margin-top: 10px;">請選取所有 Game_XXX_Turn_YYY 格式的圖片</p>
         <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
     </div>
 
     <div class="controls">
-        <button id="analyzeBtn" disabled>🚀 開始分析</button>
-        <button id="downloadExcelBtn" class="btn-excel">📊 下載報表</button>
-        <button id="downloadZipBtn" class="btn-zip">🗂️ 下載分類圖檔 (ZIP)</button>
+        <button id="analyzeBtn" class="btn-analyze" disabled>🚀 開始分析</button>
+        <button id="recalcBtn" class="btn-recalc">🔄 依新設定重算</button>
+        <button id="downloadExcelBtn" class="btn-excel">📊 下載 Excel</button>
+        <button id="downloadZipBtn" class="btn-zip">🗂️ 下載 ZIP</button>
     </div>
     
-    <div id="statusLog" style="text-align: center; color: #64748b; margin-bottom: 20px;">準備就緒</div>
+    <div class="status-container" id="statusContainer">
+        <div class="progress-wrapper">
+            <div class="progress-fill" id="progressBar"></div>
+        </div>
+        <div id="statusText">準備就緒</div>
+    </div>
+
     <div id="resultsList" class="results-list"></div>
+</div>
+
+<div id="compareBar" class="floating-compare-bar">
+    <div id="compareInfo">已選擇 0/2 局進行比對</div>
+    <button id="startCompareBtn" class="btn-start-compare" disabled>⚖️ 開始比對</button>
+    <button onclick="clearComparison()" style="background:transparent; padding:0; box-shadow:none; font-size:1.2rem;" title="清除">✕</button>
+</div>
+
+<div id="compareModal" class="compare-modal">
+    <div class="compare-container">
+        <div class="compare-header">
+            <h2 id="compareTitle">賽局差異比對</h2>
+            <button onclick="document.getElementById('compareModal').style.display='none'" style="background:#cbd5e1; color:#333;">關閉視窗</button>
+        </div>
+        <div id="compareContent">
+            </div>
+    </div>
 </div>
 
 <div id="imgModal" class="modal" onclick="if(event.target===this)this.style.display='none'">
@@ -143,23 +213,47 @@
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const analyzeBtn = document.getElementById('analyzeBtn');
+    const recalcBtn = document.getElementById('recalcBtn');
     const downloadExcelBtn = document.getElementById('downloadExcelBtn');
     const downloadZipBtn = document.getElementById('downloadZipBtn');
-    const statusLog = document.getElementById('statusLog');
+    const statusContainer = document.getElementById('statusContainer');
+    const statusText = document.getElementById('statusText');
+    const progressBar = document.getElementById('progressBar');
     const resultsList = document.getElementById('resultsList');
     const modal = document.getElementById('imgModal');
     const modalImg = document.getElementById('modalImg');
     const modalCaption = document.getElementById('modalCaption');
+    
+    // Slider & Compare UI
+    const thresholdRange = document.getElementById('thresholdRange');
+    const thresholdValue = document.getElementById('thresholdValue');
+    const compareBar = document.getElementById('compareBar');
+    const compareInfo = document.getElementById('compareInfo');
+    const startCompareBtn = document.getElementById('startCompareBtn');
+    const compareModal = document.getElementById('compareModal');
+    const compareContent = document.getElementById('compareContent');
+    const compareTitle = document.getElementById('compareTitle');
 
     let uploadedFiles = [];
     let clusteredGroups = []; 
-    let gameData = {}; // 提升為全域變數，供下載使用
+    let gameData = {}; 
+    let gameSignatures = {};
+    let gameIds = [];
+    
+    // 比對狀態
+    let selectedGames = []; 
+
     const IMG_SIZE = 150;
     const ANGLES = [0, 60, 120, 180, 240, 300];
 
-    // --- 檔案處理 ---
+    // --- Events ---
+    thresholdRange.addEventListener('input', (e) => thresholdValue.textContent = e.target.value);
+    thresholdRange.addEventListener('change', () => {
+        if(gameIds.length > 0) recalcBtn.style.display = 'flex';
+    });
+
     dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = '#e0f2fe'; });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background = '#eff6ff'; });
     dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.background = '#ffffff'; handleFiles(e.dataTransfer.files); });
     fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
@@ -167,143 +261,247 @@
         const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
         if (!imgs.length) return;
         uploadedFiles = [...uploadedFiles, ...imgs];
-        statusLog.textContent = `已載入 ${uploadedFiles.length} 張圖片`;
+        statusContainer.style.display = 'block';
+        updateProgress(0, `已載入 ${uploadedFiles.length} 張圖片`);
         analyzeBtn.disabled = false;
-        resultsList.innerHTML = '';
+        recalcBtn.style.display = 'none';
         downloadExcelBtn.style.display = 'none';
         downloadZipBtn.style.display = 'none';
+        resultsList.innerHTML = '';
+        gameSignatures = {}; gameIds = [];
+        clearComparison();
     }
 
-    // --- 分析流程 ---
-    analyzeBtn.addEventListener('click', async () => {
+    function updateProgress(percent, text) {
+        progressBar.style.width = `${percent}%`;
+        if(text) statusText.textContent = text;
+    }
+
+    // --- Analysis Logic ---
+    analyzeBtn.addEventListener('click', async () => await runAnalysis(true));
+    recalcBtn.addEventListener('click', async () => await runAnalysis(false));
+
+    async function runAnalysis(fullRun) {
         analyzeBtn.disabled = true;
-        downloadExcelBtn.style.display = 'none';
-        downloadZipBtn.style.display = 'none';
-        statusLog.textContent = "正在解析棋局結構...";
+        recalcBtn.style.display = 'none';
         resultsList.innerHTML = '';
+        clearComparison(); // 重算時清空比對選擇
 
-        // 1. 整理資料 (存入全域 gameData)
-        gameData = {};
-        uploadedFiles.forEach(file => {
-            const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i);
-            if (match) {
-                const gId = match[1];
-                const tId = parseInt(match[2]);
-                if (!gameData[gId]) gameData[gId] = {};
-                gameData[gId][tId] = file;
+        if (fullRun) {
+            updateProgress(5, "正在建立索引...");
+            gameData = {};
+            uploadedFiles.forEach(file => {
+                const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i);
+                if (match) {
+                    const gId = match[1];
+                    const tId = parseInt(match[2]);
+                    if (!gameData[gId]) gameData[gId] = {};
+                    gameData[gId][tId] = file;
+                }
+            });
+            gameIds = Object.keys(gameData).sort();
+            if (gameIds.length === 0) { alert("無有效圖片"); analyzeBtn.disabled = false; return; }
+
+            const totalGames = gameIds.length;
+            for (let i = 0; i < totalGames; i++) {
+                const gId = gameIds[i];
+                updateProgress(5 + Math.round((i / totalGames) * 80), `分析 Game ${gId}...`);
+                await new Promise(r => setTimeout(r, 0));
+                
+                const turns = Object.keys(gameData[gId]).map(Number).sort((a,b)=>a-b);
+                const signature = [];
+                for (let t of turns) {
+                    const img = await loadImage(gameData[gId][t]);
+                    const hash = await getRotatedHash(img);
+                    signature.push({ turn: t, hash: hash });
+                }
+                gameSignatures[gId] = signature;
             }
-        });
-
-        const gameIds = Object.keys(gameData).sort();
-        if (gameIds.length === 0) {
-            alert("找不到符合格式的圖片");
-            analyzeBtn.disabled = false;
-            return;
         }
 
-        // 2. 計算指紋
-        statusLog.textContent = "正在計算策略特徵...";
-        const gameSignatures = {};
-        for (let gId of gameIds) {
-            const turns = Object.keys(gameData[gId]).map(Number).sort((a,b)=>a-b);
-            const signature = [];
-            for (let t of turns) {
-                const img = await loadImage(gameData[gId][t]);
-                const hash = await getRotatedHash(img);
-                signature.push({ turn: t, hash: hash });
-            }
-            gameSignatures[gId] = signature;
-        }
+        updateProgress(90, "AI 歸類中...");
+        const currentThreshold = parseInt(thresholdRange.value);
+        clusteredGroups = performClustering(gameIds, gameSignatures, currentThreshold);
 
-        // 3. 分群
-        statusLog.textContent = "正在歸類策略...";
-        clusteredGroups = performClustering(gameIds, gameSignatures);
-
-        // 4. 渲染結果
+        updateProgress(95, "產生報表...");
         renderExpandedGroups(clusteredGroups);
         
-        statusLog.textContent = `分析完成！共 ${clusteredGroups.length} 種策略模式。`;
+        updateProgress(100, `完成！(閾值: ${currentThreshold})`);
         analyzeBtn.disabled = false;
         downloadExcelBtn.style.display = 'flex';
         downloadZipBtn.style.display = 'flex';
-    });
+    }
 
-    // --- 下載 Excel ---
-    downloadExcelBtn.addEventListener('click', () => {
-        const excelData = [];
-        clusteredGroups.forEach((group, index) => {
-            const patternName = `Pattern ${index + 1}`;
-            group.members.forEach(gameId => {
-                excelData.push({
-                    "策略群組": patternName,
-                    "賽局 ID": `Game ${gameId}`,
-                    "同組成員數": group.members.length,
-                    "代表賽局": group.repId === gameId ? "是" : ""
-                });
-            });
-        });
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(excelData);
-        const wscols = [{wch: 15}, {wch: 15}, {wch: 12}, {wch: 10}];
-        ws['!cols'] = wscols;
-        XLSX.utils.book_append_sheet(wb, ws, "分類結果");
-        XLSX.writeFile(wb, `Game_Analysis_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
-    });
-
-    // --- 下載 ZIP (新增功能) ---
-    downloadZipBtn.addEventListener('click', async () => {
-        downloadZipBtn.disabled = true;
-        downloadZipBtn.textContent = "⏳ 打包中...";
-        const zip = new JSZip();
-        
-        // 遍歷所有群組
-        clusteredGroups.forEach((group, index) => {
-            // 建立資料夾名稱：Pattern_1_Count_5
-            const folderName = `Pattern_${index + 1}_(Count_${group.members.length})`;
-            const folder = zip.folder(folderName);
-            
-            // 遍歷群組內的賽局
-            group.members.forEach(gameId => {
-                // 取得該賽局的所有圖片
-                if(gameData[gameId]) {
-                    Object.values(gameData[gameId]).forEach(file => {
-                        // 將圖片檔案加入 ZIP 的該資料夾中
-                        folder.file(file.name, file);
-                    });
-                }
-            });
-        });
-
-        // 產生 ZIP 並下載
-        try {
-            const content = await zip.generateAsync({type: "blob"});
-            saveAs(content, `Classified_Games_${new Date().toISOString().slice(0,10)}.zip`);
-            statusLog.textContent = "ZIP 打包下載完成！";
-        } catch (err) {
-            console.error(err);
-            statusLog.textContent = "ZIP 打包失敗，請檢查 console";
-        } finally {
-            downloadZipBtn.disabled = false;
-            downloadZipBtn.textContent = "🗂️ 下載分類圖檔 (ZIP)";
+    // --- 比對功能邏輯 (Diff Logic) ---
+    
+    // 1. 處理選擇
+    window.toggleCompare = function(gameId, btn) {
+        if (selectedGames.includes(gameId)) {
+            selectedGames = selectedGames.filter(id => id !== gameId);
+            btn.classList.remove('active');
+            btn.innerHTML = '⚖️ 加入比對';
+            document.getElementById(`row-${gameId}`).classList.remove('selected-for-compare');
+        } else {
+            if (selectedGames.length >= 2) {
+                alert("一次只能比對兩局遊戲，請先取消其他選擇。");
+                return;
+            }
+            selectedGames.push(gameId);
+            btn.classList.add('active');
+            btn.innerHTML = '✅ 已選擇';
+            document.getElementById(`row-${gameId}`).classList.add('selected-for-compare');
         }
+        updateCompareBar();
+    };
+
+    function updateCompareBar() {
+        if (selectedGames.length > 0) {
+            compareBar.classList.add('show');
+            compareInfo.textContent = `已選擇 ${selectedGames.length}/2 局 (${selectedGames.map(id=>'Game '+id).join(', ')})`;
+            startCompareBtn.disabled = selectedGames.length !== 2;
+        } else {
+            compareBar.classList.remove('show');
+        }
+    }
+
+    window.clearComparison = function() {
+        selectedGames = [];
+        document.querySelectorAll('.btn-compare-toggle').forEach(btn => {
+            btn.classList.remove('active');
+            btn.innerHTML = '⚖️ 加入比對';
+        });
+        document.querySelectorAll('.game-row').forEach(row => row.classList.remove('selected-for-compare'));
+        updateCompareBar();
+    };
+
+    // 2. 開始比對 (生成畫面)
+    startCompareBtn.addEventListener('click', async () => {
+        if (selectedGames.length !== 2) return;
+        
+        const gA = selectedGames[0];
+        const gB = selectedGames[1];
+        
+        compareModal.style.display = 'block';
+        compareTitle.textContent = `比對結果：Game ${gA} vs Game ${gB}`;
+        compareContent.innerHTML = '<div style="text-align:center; padding:50px;">正在計算像素差異...</div>';
+
+        // 等待 UI 渲染 Modal 後執行重度運算
+        await new Promise(r => setTimeout(r, 100));
+        
+        const turnsA = Object.keys(gameData[gA]).map(Number).sort((a,b)=>a-b);
+        const turnsB = Object.keys(gameData[gB]).map(Number).sort((a,b)=>a-b);
+        const allTurns = new Set([...turnsA, ...turnsB]);
+        const sortedTurns = Array.from(allTurns).sort((a,b)=>a-b);
+
+        let html = `
+            <div class="compare-row" style="background:#f8fafc; border-bottom:2px solid #cbd5e1; position:sticky; top:0; z-index:10;">
+                <div class="compare-col-header">回合</div>
+                <div class="compare-col-header">Game ${gA}</div>
+                <div class="compare-col-header">Game ${gB}</div>
+                <div class="compare-col-header">差異 (Diff)</div>
+            </div>
+        `;
+
+        for (let t of sortedTurns) {
+            const fileA = gameData[gA][t];
+            const fileB = gameData[gB][t];
+            
+            let imgHtmlA = fileA ? `<img src="${URL.createObjectURL(fileA)}" class="diff-img">` : '<div style="color:#ccc;">(無資料)</div>';
+            let imgHtmlB = fileB ? `<img src="${URL.createObjectURL(fileB)}" class="diff-img">` : '<div style="color:#ccc;">(無資料)</div>';
+            let diffHtml = '';
+
+            if (fileA && fileB) {
+                // 生成 Diff 圖片
+                try {
+                    const imgObjA = await loadImage(fileA);
+                    const imgObjB = await loadImage(fileB);
+                    const diffBlob = await generateDiffImage(imgObjA, imgObjB);
+                    const diffUrl = URL.createObjectURL(diffBlob);
+                    diffHtml = `
+                        <img src="${diffUrl}" class="diff-img diff-highlight" onclick="showModal('${diffUrl}', 'Turn ${t} Diff')">
+                        <div class="diff-label" style="color:#ef4444;">紅色 = 差異處</div>
+                    `;
+                } catch (e) {
+                    diffHtml = '計算失敗';
+                }
+            } else {
+                diffHtml = '<div style="color:#ccc;">無法比對</div>';
+            }
+
+            html += `
+                <div class="compare-row">
+                    <div style="text-align:center; font-weight:bold; font-size:1.2rem; color:#3b82f6;">Turn ${t}</div>
+                    <div class="diff-img-box">${imgHtmlA}</div>
+                    <div class="diff-img-box">${imgHtmlB}</div>
+                    <div class="diff-img-box">${diffHtml}</div>
+                </div>
+            `;
+        }
+        
+        compareContent.innerHTML = html;
     });
 
-    // --- 演算法 ---
-    function performClustering(gameIds, signatures) {
+    // 3. 像素比對核心 (Canvas)
+    async function generateDiffImage(img1, img2) {
+        const w = Math.max(img1.width, img2.width);
+        const h = Math.max(img1.height, img2.height);
+        
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        
+        // Draw Img1
+        ctx.drawImage(img1, 0, 0, w, h);
+        const d1 = ctx.getImageData(0,0,w,h);
+        
+        // Draw Img2 (Offscreen to get data)
+        const c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+        const ctx2 = c2.getContext('2d');
+        ctx2.drawImage(img2, 0, 0, w, h);
+        const d2 = ctx2.getImageData(0,0,w,h);
+        
+        const target = ctx.createImageData(w, h);
+        
+        // Pixel Diff
+        for (let i = 0; i < d1.data.length; i += 4) {
+            const r1 = d1.data[i], g1 = d1.data[i+1], b1 = d1.data[i+2], a1 = d1.data[i+3];
+            const r2 = d2.data[i], g2 = d2.data[i+1], b2 = d2.data[i+2], a2 = d2.data[i+3];
+            
+            // 計算歐幾里得距離
+            const dist = Math.sqrt((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2);
+            
+            if (dist > 30) { // 差異閾值，超過則標紅
+                target.data[i] = 255;   // R
+                target.data[i+1] = 0;   // G
+                target.data[i+2] = 0;   // B
+                target.data[i+3] = 255; // Alpha
+            } else {
+                // 相同則顯示半透明原圖 (灰階化)
+                const gray = (r1 + g1 + b1) / 3;
+                target.data[i] = gray;
+                target.data[i+1] = gray;
+                target.data[i+2] = gray;
+                target.data[i+3] = 80; // 很淡
+            }
+        }
+        
+        ctx.putImageData(target, 0, 0);
+        return new Promise(resolve => c.toBlob(resolve));
+    }
+
+    // --- Clustering & Helpers ---
+    function performClustering(gameIds, signatures, threshold) {
         const groups = [];
         const visited = new Set();
-        const THRESHOLD = 5;
-
         for (let i = 0; i < gameIds.length; i++) {
             const currentId = gameIds[i];
             if (visited.has(currentId)) continue;
             const newGroup = { repId: currentId, members: [currentId] };
             visited.add(currentId);
-
             for (let j = i + 1; j < gameIds.length; j++) {
                 const targetId = gameIds[j];
                 if (visited.has(targetId)) continue;
-                if (isStrategySimilar(signatures[currentId], signatures[targetId], THRESHOLD)) {
+                if (isStrategySimilar(signatures[currentId], signatures[targetId], threshold)) {
                     newGroup.members.push(targetId);
                     visited.add(targetId);
                 }
@@ -312,7 +510,6 @@
         }
         return groups.sort((a,b) => b.members.length - a.members.length);
     }
-
     function isStrategySimilar(sigA, sigB, threshold) {
         const len = Math.min(sigA.length, sigB.length);
         if (len === 0) return false;
@@ -323,20 +520,17 @@
         return true;
     }
 
-    // --- 渲染 ---
     function renderExpandedGroups(groups) {
         resultsList.innerHTML = '';
         groups.forEach((group, idx) => {
             const groupCard = document.createElement('div');
             groupCard.className = 'group-card';
-            
             groupCard.innerHTML = `
                 <div class="group-header">
-                    <div class="group-title">策略模式 ${idx + 1}</div>
-                    <span class="group-count">包含 ${group.members.length} 局</span>
+                    <div class="group-title">🧩 策略模式 ${idx + 1}</div>
+                    <span class="group-badge">包含 ${group.members.length} 局</span>
                 </div>
             `;
-            
             group.members.forEach(gameId => {
                 const turns = Object.keys(gameData[gameId]).map(Number).sort((a,b)=>a-b);
                 let timelineHtml = '<div class="timeline-container">';
@@ -345,96 +539,87 @@
                     if (tIdx > 0) timelineHtml += `<div class="arrow-separator">→</div>`;
                     timelineHtml += `
                         <div class="step-item">
-                            <img src="${imgUrl}" class="step-img" 
-                                 onclick="showModal('${imgUrl}', 'Game ${gameId} - Turn ${turn}')">
+                            <img src="${imgUrl}" class="step-img" onclick="showModal('${imgUrl}', 'Game ${gameId} - Turn ${turn}')">
                             <div class="step-label">Turn ${turn}</div>
                         </div>
                     `;
                 });
                 timelineHtml += '</div>';
-
+                
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'game-row';
+                rowDiv.id = `row-${gameId}`;
                 rowDiv.innerHTML = `
-                    <div class="game-label">Game ${gameId}</div>
+                    <div class="game-header-bar">
+                        <div class="game-label">Game ${gameId}</div>
+                        <button class="btn-compare-toggle" onclick="toggleCompare('${gameId}', this)">⚖️ 加入比對</button>
+                    </div>
                     ${timelineHtml}
                 `;
                 groupCard.appendChild(rowDiv);
             });
-
             resultsList.appendChild(groupCard);
         });
     }
 
-    function showModal(src, text) {
-        modal.style.display = 'flex';
-        modalImg.src = src;
-        modalCaption.textContent = text;
-    }
-
-    // --- 影像處理函式 ---
-    function loadImage(file) {
-        return new Promise(resolve => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.src = URL.createObjectURL(file);
-        });
-    }
+    // --- Image Processing (Base) ---
+    function showModal(src, text) { modal.style.display = 'flex'; modalImg.src = src; modalCaption.textContent = text; }
+    function loadImage(file) { return new Promise(resolve => { const img = new Image(); img.onload = () => resolve(img); img.src = URL.createObjectURL(file); }); }
     function getRotatedHash(img) {
-        const canvas = preprocessImage(img);
-        let minHash = null;
+        const canvas = preprocessImage(img); let minHash = null;
         for (let angle of ANGLES) {
             const rotCanvas = rotateCanvas(canvas, angle);
             const hash = calculateHash(rotCanvas);
             if (minHash === null || hash < minHash) minHash = hash;
-        }
-        return minHash;
+        } return minHash;
     }
     function preprocessImage(img) {
-        const size = IMG_SIZE;
-        const cvs = document.createElement('canvas');
-        cvs.width = size; cvs.height = size;
-        const ctx = cvs.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
+        const size = IMG_SIZE; const cvs = document.createElement('canvas'); cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,size,size);
         const scale = Math.min(size/img.naturalWidth, size/img.naturalHeight) * 0.9;
-        const w = img.naturalWidth * scale;
-        const h = img.naturalHeight * scale;
-        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
-        return cvs;
+        const w = img.naturalWidth * scale; const h = img.naturalHeight * scale;
+        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h); return cvs;
     }
     function rotateCanvas(source, angle) {
         if (angle === 0) return source;
-        const cvs = document.createElement('canvas');
-        cvs.width = source.width; cvs.height = source.height;
-        const ctx = cvs.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cvs.width,cvs.height);
-        ctx.translate(cvs.width/2, cvs.height/2);
-        ctx.rotate(angle * Math.PI / 180);
-        ctx.drawImage(source, -cvs.width/2, -cvs.height/2);
-        return cvs;
+        const cvs = document.createElement('canvas'); cvs.width = source.width; cvs.height = source.height;
+        const ctx = cvs.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.translate(cvs.width/2, cvs.height/2); ctx.rotate(angle * Math.PI / 180);
+        ctx.drawImage(source, -cvs.width/2, -cvs.height/2); return cvs;
     }
     function calculateHash(canvas) {
-        const size = 16; 
-        const cvs = document.createElement('canvas');
-        cvs.width = size; cvs.height = size;
-        const ctx = cvs.getContext('2d');
-        ctx.drawImage(canvas, 0, 0, size, size);
+        const size = 16; const cvs = document.createElement('canvas'); cvs.width = size; cvs.height = size;
+        const ctx = cvs.getContext('2d'); ctx.drawImage(canvas, 0, 0, size, size);
         const data = ctx.getImageData(0, 0, size, size).data;
         let hash = "";
         for(let i=0; i<data.length; i+=4) {
             const r=data[i], g=data[i+1], b=data[i+2];
-            if ((r+g+b)/3 > 220) hash += "0"; 
-            else if (r > g+30 && r > b+30) hash += "1";
-            else if (b > r+30 && b > g+30) hash += "2";
-            else hash += "3";
+            if ((r+g+b)/3 > 220) hash += "0"; else if (r > g+30 && r > b+30) hash += "1";
+            else if (b > r+30 && b > g+30) hash += "2"; else hash += "3";
+        } return hash;
+    }
+    function hammingDist(s1, s2) { let d = 0; for(let i=0; i<s1.length; i++) if(s1[i]!==s2[i]) d++; return d; }
+    
+    // 下載功能 (省略重複代碼，保留連結)
+    downloadExcelBtn.addEventListener('click', () => {
+        const excelData = [];
+        clusteredGroups.forEach((group, index) => {
+            group.members.forEach(gameId => {
+                excelData.push({ "策略群組": `Pattern ${index+1}`, "賽局 ID": `Game ${gameId}`, "同組成員數": group.members.length, "判定閾值": thresholdRange.value });
+            });
+        });
+        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(excelData); ws['!cols'] = [{wch:15},{wch:15},{wch:12},{wch:10}];
+        XLSX.utils.book_append_sheet(wb, ws, "分類結果"); XLSX.writeFile(wb, `Game_Analysis_T${thresholdRange.value}.xlsx`);
+    });
+    downloadZipBtn.addEventListener('click', async () => {
+        downloadZipBtn.disabled = true; downloadZipBtn.innerText = "⏳ 打包中..."; const zip = new JSZip();
+        for (let i = 0; i < clusteredGroups.length; i++) {
+            const group = clusteredGroups[i];
+            const pFolder = zip.folder(`Pattern_${i+1}_(Count_${group.members.length})`);
+            group.members.forEach(gid => { if(gameData[gid]) { const gFolder = pFolder.folder(`Game_${gid}`); Object.values(gameData[gid]).forEach(f => gFolder.file(f.name, f)); }});
         }
-        return hash;
-    }
-    function hammingDist(s1, s2) {
-        let d = 0;
-        for(let i=0; i<s1.length; i++) if(s1[i]!==s2[i]) d++;
-        return d;
-    }
+        try { const content = await zip.generateAsync({type:"blob"}); saveAs(content, `Classified_Games.zip`); } catch(e){} finally { downloadZipBtn.disabled = false; downloadZipBtn.innerText = "🗂️ 下載 ZIP"; }
+    });
 </script>
 </body>
 </html>
