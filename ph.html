@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 Pro (彈性比對版)</title>
+    <title>AI 賽局演變分析器 Pro (即時重算版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -22,7 +22,12 @@
         .container { max-width: 1200px; margin: 0 auto; }
 
         header { text-align: center; margin-bottom: 30px; position: relative; background: var(--card-bg); padding: 30px; border-radius: 24px; box-shadow: var(--shadow); border: var(--glass-border); backdrop-filter: blur(10px); }
-        h1 { font-size: 2.2rem; margin: 0 0 10px 0; font-weight: 800; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        /* 標題樣式修正 */
+        h1 { font-size: 2.2rem; margin: 0 0 10px 0; font-weight: 800; color: var(--text-main); }
+        .gradient-text { background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .pro-badge { font-size: 0.5em; vertical-align: middle; background: var(--text-main); color: white; padding: 4px 8px; border-radius: 6px; -webkit-text-fill-color: white; }
+
         .desc { color: var(--text-light); font-size: 1rem; }
         .btn-help { position: absolute; top: 20px; right: 20px; background: #f1f5f9; color: var(--text-main); border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
         .btn-help:hover { background: var(--primary); color: white; transform: rotate(15deg); }
@@ -97,9 +102,6 @@
         .angle-input { width: 60px; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-weight: bold; color: var(--text-main); }
         .angle-input:focus { outline: none; border-color: var(--primary); }
         
-        .toggle-label { font-size: 0.9rem; color: var(--text-main); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-        input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--secondary); cursor: pointer; }
-
         .diff-grid { display: grid; grid-template-columns: 80px 1fr 1fr 1fr; gap: 15px; border-bottom: 1px solid #eee; padding: 15px 0; align-items: center; }
         .diff-header { font-weight: bold; color: var(--text-light); text-align: center; background: #f8fafc; padding: 10px; border-radius: 8px; }
         .diff-img-wrap { text-align: center; }
@@ -112,7 +114,10 @@
 <div class="container">
     <header>
         <button class="btn-help" onclick="showHelp()" title="使用說明">?</button>
-        <h1>AI 賽局演變分析器 <span style="font-size:0.5em; vertical-align:middle; background:var(--text-main); color:white; padding:4px 8px; border-radius:6px;">Pro</span></h1>
+        <h1>
+            <span class="gradient-text">AI 賽局演變分析器</span> 
+            <span class="pro-badge">Pro</span>
+        </h1>
         <p class="desc">智慧分類・人機協作・精準比對</p>
     </header>
 
@@ -127,8 +132,8 @@
             <p>3. <b>修正</b>：按住卡片標題旁的 <code>⋮⋮</code> 圖示可拖曳分類。</p>
             <p>4. <b>比對</b>：選取兩局後點擊比對。
                 <ul>
-                    <li>旋轉/鏡像：僅改變 Game B 的顯示方向 (方便觀看)。</li>
-                    <li>計算差異時套用變換：勾選後，差異圖才會根據旋轉後的圖片生成。</li>
+                    <li>可輸入自訂角度 (預設 60) 調整 Game B 視角。</li>
+                    <li>調整旋轉/鏡像後，<b>差異圖會自動重新計算</b>。</li>
                 </ul>
             </p>
         </div>
@@ -183,13 +188,7 @@
             <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
             <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
             
-            <div class="diff-options">
-                <label class="toggle-label">
-                    <input type="checkbox" id="applyToDiff" onchange="renderComparisonResults()">
-                    計算差異時套用變換
-                </label>
-                <div id="diffStatus" style="font-size:0.85rem; color:#64748b; font-weight:normal;">(原始視角)</div>
-            </div>
+            <div id="diffStatus" style="font-size:0.85rem; color:#64748b; font-weight:normal; margin-left:auto;">(原始視角)</div>
         </div>
 
         <div id="compareContent"></div>
@@ -216,7 +215,6 @@
     const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
     const rotateStepInput = document.getElementById('rotateStepInput');
-    const applyToDiffCheckbox = document.getElementById('applyToDiff');
 
     let uploadedFiles = [], clusteredGroups = [], gameData = {}, gameSignatures = {}, gameIds = [], selectedGames = [];
     const IMG_SIZE = 150, ANGLES = [0, 60, 120, 180, 240, 300];
@@ -312,7 +310,6 @@
     startCompareBtn.addEventListener('click', () => {
         if (selectedGames.length !== 2) return;
         currentCompareRotation = 0; currentCompareMirror = false; 
-        applyToDiffCheckbox.checked = false; // 預設不套用旋轉至差異圖 (您的需求)
         updateDiffStatus();
         compareModal.style.display = 'flex';
         document.getElementById('compareTitle').innerText = `比對: Game ${selectedGames[0]} vs ${selectedGames[1]}`;
@@ -342,8 +339,6 @@
         const allTurns = Array.from(new Set([...turnsA, ...turnsB])).sort((a,b)=>a-b);
         let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>Game ${gB} (檢視)</div><div style="color:var(--secondary);">差異 (Diff)</div></div>`;
 
-        const applyTransformToDiff = applyToDiffCheckbox.checked;
-
         for (let t of allTurns) {
             const fA = gameData[gA][t], fB = gameData[gB][t];
             let imgA = fA ? `<img src="${URL.createObjectURL(fA)}">` : '<span style="color:#ccc">無</span>';
@@ -355,15 +350,12 @@
                     const imgObjA = await loadImage(fA);
                     const imgObjB = await loadImage(fB);
                     
-                    // 中間欄位：始終顯示旋轉後的圖片供檢視
+                    // Game B: 顯示變換後的圖 (供檢視)
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
                     imgB_Html = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
 
-                    // 右側差異圖：根據 Checkbox 決定是否使用變換後的圖片
-                    let diffSourceB = applyTransformToDiff ? transformedCanvasB : imgObjB;
-                    
-                    // 如果不套用變換，直接用原始 imgObjB 生成 Diff (即您的需求)
-                    const diffBlob = await generateDiffImage(imgObjA, diffSourceB);
+                    // Diff: 使用 [Game A] 與 [變換後的 Game B] 計算差異 (即時連動)
+                    const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
             }
