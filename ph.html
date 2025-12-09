@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 Pro (直覺鎖定版)</title>
+    <title>AI 賽局演變分析器 Pro (精準比對修正版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -129,7 +129,7 @@
             <p>4. <b>比對</b>：選取兩局後點擊比對。
                 <ul>
                     <li>可輸入角度 (預設 60) 調整 Game B 的顯示方向。</li>
-                    <li>調整後，<b>右側差異圖會自動以「Game A」為基準，比較「調整後的 Game B」</b>，讓您直覺看出對齊後的差異。</li>
+                    <li>調整後，系統會自動填滿背景，並以「Game A」為基準比較「修正後的 Game B」，消除旋轉邊框造成的誤判。</li>
                 </ul>
             </p>
         </div>
@@ -326,6 +326,7 @@
     };
     window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
+    // --- 核心修正區塊：比對與圖像處理 ---
     async function renderComparisonResults() {
         const gA = selectedGames[0], gB = selectedGames[1];
         compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在運算中...</div>';
@@ -346,11 +347,12 @@
                     const imgObjA = await loadImage(fA);
                     const imgObjB = await loadImage(fB);
                     
-                    // 1. 變換 Game B 供中間欄位顯示
+                    // 1. 產生修正視角後的 Game B (已填滿背景)
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
                     imgB_Html = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
 
-                    // 2. 強制使用變換後的 B 與原始 A 進行比對
+                    // 2. 使用「修正後的 B」與「原始 A」進行比對
+                    // 這樣旋轉產生的角落空白已經是白色，不會被視為差異
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
@@ -364,11 +366,18 @@
         const canvas = document.createElement('canvas');
         canvas.width = sourceImg.width; canvas.height = sourceImg.height;
         const ctx = canvas.getContext('2d');
-        ctx.save(); ctx.translate(canvas.width / 2, canvas.height / 2);
+        
+        // [修正] 先填滿白色背景，避免旋轉後出現透明角落導致比對錯誤
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save(); 
+        ctx.translate(canvas.width / 2, canvas.height / 2);
         if (mirror) ctx.scale(-1, 1);
         ctx.rotate(angle * Math.PI / 180);
         ctx.drawImage(sourceImg, -sourceImg.width / 2, -sourceImg.height / 2);
-        ctx.restore(); return canvas;
+        ctx.restore(); 
+        return canvas;
     }
 
     async function generateDiffImage(img1, img2OrCanvas) {
