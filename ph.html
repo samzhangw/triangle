@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 (紅藍鎖定版)</title>
+    <title>AI 賽局演變分析器 (全功能旗艦版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -30,13 +30,20 @@
         .btn-help:hover { background: var(--primary); color: white; transform: rotate(15deg); }
 
         .dashboard { background: var(--card-bg); padding: 25px; border-radius: 20px; box-shadow: var(--shadow); border: var(--glass-border); margin-bottom: 30px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
-        .setting-group { display: flex; align-items: center; gap: 15px; flex: 1; min-width: 300px; }
+        .setting-group { display: flex; align-items: center; gap: 15px; flex: 1; min-width: 250px; }
         .setting-label { font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        
+        /* New Checkbox Style */
+        .checkbox-wrapper { display: flex; align-items: center; gap: 8px; cursor: pointer; background: rgba(255,255,255,0.5); padding: 5px 12px; border-radius: 8px; border: 1px solid #cbd5e1; transition: 0.2s; }
+        .checkbox-wrapper:hover { border-color: var(--primary); background: #eef2ff; }
+        .checkbox-wrapper input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+        .checkbox-label { font-weight: 600; font-size: 0.95rem; color: var(--text-main); user-select: none; }
+
         input[type=range] { flex: 1; height: 6px; border-radius: 5px; background: #e2e8f0; outline: none; -webkit-appearance: none; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); cursor: pointer; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.1s; }
         input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
         .slider-value { background: var(--primary); color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.85rem; font-weight: bold; min-width: 35px; text-align: center; }
-        .action-group { display: flex; gap: 10px; }
+        .action-group { display: flex; gap: 10px; flex-wrap: wrap; }
         .btn { padding: 10px 20px; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
         .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(1); }
@@ -128,9 +135,9 @@
         <button class="btn-help" onclick="showHelp()" title="使用說明">?</button>
         <h1>
             <span class="gradient-text">AI 賽局演變分析器</span> 
-            <span class="pro-badge">Red/Blue High Accuracy</span>
+            <span class="pro-badge">Ultimate</span>
         </h1>
-        <p class="desc">專注識別「紅、藍」賽局策略變化，導入 HSV 精準色彩判定與抗手震容錯。</p>
+        <p class="desc">智慧識別「紅、藍」賽局策略，支援全彩切換、混色分析與 HSV 高精度運算。</p>
     </header>
 
     <div id="helpModal" class="modal-overlay" onclick="if(event.target===this)closeModal('helpModal')">
@@ -140,9 +147,9 @@
                 <button onclick="closeModal('helpModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <p>1. <b>上傳</b>：拖曳 Game_X_Turn_Y 圖片。</p>
-            <p>2. <b>分析</b>：系統會自動進行策略歸類 (使用 HSV 增強準確度)。</p>
-            <p>3. <b>比對</b>：選取兩局進行比對。</p>
-            <p>4. <b>洋蔥皮模式</b>：在比對視窗開啟 🧅 按鈕，即可將兩張圖疊加顯示。</p>
+            <p>2. <b>分析</b>：系統會自動進行策略歸類 (HSV 增強)。</p>
+            <p>3. <b>混色模式</b>：若勾選「🔴🔵 視為同色」，系統將忽略紅藍差異，只分析落子位置。</p>
+            <p>4. <b>比對</b>：選取兩局進行比對，支援洋蔥皮疊圖與全彩差異切換。</p>
         </div>
     </div>
 
@@ -151,6 +158,14 @@
             <div class="setting-label"><span>🤖 AI 嚴格度</span><span id="thresholdValue" class="slider-value">5</span></div>
             <input type="range" id="thresholdRange" min="0" max="15" value="5" step="1">
         </div>
+        
+        <div class="setting-group" style="flex:0; min-width:auto;">
+            <label class="checkbox-wrapper" title="分析分類時，將紅色與藍色視為同一種策略">
+                <input type="checkbox" id="ignoreColorBtn">
+                <span class="checkbox-label">🔴🔵 視為同色</span>
+            </label>
+        </div>
+
         <div class="action-group">
             <button id="analyzeBtn" class="btn btn-primary" disabled>🚀 開始分析</button>
             <button id="recalcBtn" class="btn btn-recalc">🔄 依設定重算</button>
@@ -185,25 +200,24 @@
 <div id="compareModal" class="modal-overlay">
     <div class="modal-content">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:15px;">
-            <h2 id="compareTitle" style="margin:0; font-size:1.5rem;">紅藍差異比對 (高精度)</h2>
+            <h2 id="compareTitle" style="margin:0; font-size:1.5rem;">賽局差異比對</h2>
             <button onclick="closeModal('compareModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
         </div>
         
         <div class="diff-toolbar">
             <div style="display:flex; align-items:center; gap:5px;">
-                <span>每次旋轉:</span>
-                <input type="number" id="rotateStepInput" value="60" min="1" max="180" class="angle-input">
+                <input type="number" id="rotateStepInput" value="60" min="1" max="180" class="angle-input" title="旋轉角度">
                 <span style="font-size:0.9rem;">度</span>
                 <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
                 <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
+                <button id="strategyFilterBtn" class="diff-btn active" onclick="toggleStrategyFilter()" style="margin-left:10px;">🎨 鎖定紅藍</button>
             </div>
 
             <div class="onion-controls">
-                <button id="onionToggleBtn" class="diff-btn" onclick="toggleOnionMode()">🧅 洋蔥皮模式</button>
+                <button id="onionToggleBtn" class="diff-btn" onclick="toggleOnionMode()">🧅 洋蔥皮</button>
                 <div id="onionSliderGroup" class="onion-slider-group">
                     <span>透明度</span>
                     <input type="range" id="onionOpacityRange" min="0" max="100" value="50" oninput="updateOnionOpacity(this.value)">
-                    <span id="onionOpacityVal">50%</span>
                 </div>
             </div>
             
@@ -230,29 +244,35 @@
     const downloadExcelBtn = document.getElementById('downloadExcelBtn'), downloadZipBtn = document.getElementById('downloadZipBtn'), statusContainer = document.getElementById('statusContainer');
     const statusText = document.getElementById('statusText'), progressBar = document.getElementById('progressBar'), resultsList = document.getElementById('resultsList'), addGroupBtn = document.getElementById('addGroupBtn');
     const thresholdRange = document.getElementById('thresholdRange'), thresholdValue = document.getElementById('thresholdValue');
+    const ignoreColorBtn = document.getElementById('ignoreColorBtn'); // 新增：混色模式 checkbox
     const resultSummary = document.getElementById('resultSummary');
     const compareBar = document.getElementById('compareBar'), compareInfo = document.getElementById('compareInfo'), startCompareBtn = document.getElementById('startCompareBtn');
     const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
     const rotateStepInput = document.getElementById('rotateStepInput');
     
-    // Onion Skin Elements
+    // Onion Skin & Filter Elements
     const onionToggleBtn = document.getElementById('onionToggleBtn');
     const onionSliderGroup = document.getElementById('onionSliderGroup');
     const onionOpacityRange = document.getElementById('onionOpacityRange');
-    const onionOpacityVal = document.getElementById('onionOpacityVal');
+    const strategyFilterBtn = document.getElementById('strategyFilterBtn');
 
     let uploadedFiles = [], clusteredGroups = [], gameData = {}, gameSignatures = {}, gameIds = [], selectedGames = [];
     const IMG_SIZE = 150, ANGLES = [0, 60, 120, 180, 240, 300];
     let currentCompareRotation = 0;
     let currentCompareMirror = false;
     
-    // Onion Skin State
+    // States
     let isOnionMode = false;
     let currentOnionOpacity = 0.5;
+    let isStrategyFilterEnabled = true;
 
     thresholdRange.addEventListener('input', (e) => thresholdValue.textContent = e.target.value);
     thresholdRange.addEventListener('change', () => { if(gameIds.length > 0) recalcBtn.style.display = 'inline-flex'; });
+    
+    // 新增：當勾選混色模式時，也觸發重新計算按鈕
+    ignoreColorBtn.addEventListener('change', () => { if(gameIds.length > 0) recalcBtn.style.display = 'inline-flex'; });
+
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = '#eef2ff'; });
     dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.style.borderColor = '#cbd5e1'; dropZone.style.background = 'rgba(255,255,255,0.6)'; });
@@ -274,14 +294,20 @@
 
     async function runAnalysis(fullRun) {
         analyzeBtn.disabled = true; recalcBtn.style.display = 'none'; resultsList.innerHTML = ''; resultSummary.style.display = 'none'; clearComparison();
+        
+        // 取得是否忽略顏色差異的設定
+        const ignoreColor = ignoreColorBtn.checked;
+        const modeText = ignoreColor ? "(混色模式)" : "(區分紅藍)";
+
         if (fullRun) {
-            updateProgress(5, "正在建立索引 (HSV 增強)..."); gameData = {};
+            updateProgress(5, `正在建立索引 ${modeText}...`); gameData = {};
             uploadedFiles.forEach(file => { const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i); if (match) { const gId = match[1], tId = parseInt(match[2]); if (!gameData[gId]) gameData[gId] = {}; gameData[gId][tId] = file; } });
             gameIds = Object.keys(gameData).sort(); if (gameIds.length === 0) { alert("無有效圖片"); analyzeBtn.disabled = false; return; }
             for (let i = 0; i < gameIds.length; i++) {
                 updateProgress(5 + Math.round((i / gameIds.length) * 80), `分析 Game ${gameIds[i]}...`); await new Promise(r => setTimeout(r, 0));
                 const turns = Object.keys(gameData[gameIds[i]]).map(Number).sort((a,b)=>a-b), signature = [];
-                for (let t of turns) { const img = await loadImage(gameData[gameIds[i]][t]), hash = await getRotatedHash(img); signature.push({ turn: t, hash: hash }); }
+                // 傳入 ignoreColor 參數到 Hash 計算中
+                for (let t of turns) { const img = await loadImage(gameData[gameIds[i]][t]), hash = await getRotatedHash(img, ignoreColor); signature.push({ turn: t, hash: hash }); }
                 gameSignatures[gameIds[i]] = signature;
             }
         }
@@ -289,7 +315,7 @@
         updateProgress(95, "正在產生視覺化報表..."); renderExpandedGroups(clusteredGroups);
         
         resultSummary.style.display = 'flex';
-        resultSummary.innerHTML = `<div>📊 分析完成，AI 自動識別出 <span style="font-size:1.5rem; color:var(--primary); font-weight:800; margin:0 5px;">${clusteredGroups.length}</span> 種策略流派</div>`;
+        resultSummary.innerHTML = `<div>📊 分析完成 ${modeText}，AI 自動識別出 <span style="font-size:1.5rem; color:var(--primary); font-weight:800; margin:0 5px;">${clusteredGroups.length}</span> 種策略流派</div>`;
 
         updateProgress(100, `分析完成！`); analyzeBtn.disabled = false; downloadExcelBtn.style.display = 'inline-flex'; downloadZipBtn.style.display = 'inline-flex'; addGroupBtn.style.display = 'block';
     }
@@ -316,8 +342,11 @@
         groups.forEach((group, idx) => {
             const groupCard = document.createElement('div'); groupCard.className = 'group-card'; groupCard.dataset.index = idx;
             let reasonHtml = '';
+            // 顯示歸類模式
+            const modeLabel = ignoreColorBtn.checked ? " (混色)" : "";
+            
             if (group.repId) {
-                reasonHtml = `<div class="group-reason">🔍 歸類原因：賽局演變特徵與 <b>Game ${group.repId}</b> 高度相似 (視覺差異指數 < ${thresholdRange.value})</div>`;
+                reasonHtml = `<div class="group-reason">🔍 歸類原因：與 <b>Game ${group.repId}</b> 策略高度相似${modeLabel} (差異指數 < ${thresholdRange.value})</div>`;
             } else {
                 reasonHtml = `<div class="group-reason" style="border-left-color:#94a3b8;">📂 自訂群組 (手動歸類)</div>`;
             }
@@ -360,11 +389,10 @@
     startCompareBtn.addEventListener('click', () => {
         if (selectedGames.length !== 2) return;
         currentCompareRotation = 0; currentCompareMirror = false; 
-        
         isOnionMode = false;
         onionToggleBtn.classList.remove('active');
         onionSliderGroup.classList.remove('active');
-
+        
         updateDiffStatus();
         compareModal.style.display = 'flex';
         document.getElementById('compareTitle').innerText = `比對: Game ${selectedGames[0]} vs ${selectedGames[1]}`;
@@ -375,6 +403,7 @@
         let status = [];
         if (currentCompareRotation > 0) status.push(`旋轉 ${currentCompareRotation}°`);
         if (currentCompareMirror) status.push(`鏡像`);
+        if (!isStrategyFilterEnabled) status.push(`全彩比對`);
         diffStatus.textContent = status.length > 0 ? ("(變換: " + status.join(" + ") + ")") : "(原始視角)";
     }
 
@@ -385,7 +414,6 @@
     };
     window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
-    // --- Onion Skin Logic ---
     window.toggleOnionMode = function() {
         isOnionMode = !isOnionMode;
         if (isOnionMode) {
@@ -397,10 +425,26 @@
         }
         renderComparisonResults();
     };
+    
+    window.toggleStrategyFilter = function() {
+        isStrategyFilterEnabled = !isStrategyFilterEnabled;
+        updateStrategyFilterBtnUI();
+        updateDiffStatus();
+        renderComparisonResults();
+    };
+
+    function updateStrategyFilterBtnUI() {
+        if (isStrategyFilterEnabled) {
+            strategyFilterBtn.classList.add('active');
+            strategyFilterBtn.textContent = '🎨 鎖定紅藍';
+        } else {
+            strategyFilterBtn.classList.remove('active');
+            strategyFilterBtn.textContent = '🌈 全彩比對';
+        }
+    }
 
     window.updateOnionOpacity = function(val) {
         currentOnionOpacity = val / 100;
-        onionOpacityVal.textContent = `${val}%`;
         const overlays = document.querySelectorAll('.onion-layer-overlay');
         overlays.forEach(img => img.style.opacity = currentOnionOpacity);
     };
@@ -414,7 +458,9 @@
         const allTurns = Array.from(new Set([...turnsA, ...turnsB])).sort((a,b)=>a-b);
         
         const middleTitle = isOnionMode ? `疊圖模式 (A+B)` : `Game ${gB} (檢視)`;
-        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>${middleTitle}</div><div style="color:var(--secondary);">策略差異 (紅/藍)</div></div>`;
+        const diffTitle = isStrategyFilterEnabled ? "策略差異 (紅/藍)" : "所有視覺差異";
+        
+        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>${middleTitle}</div><div style="color:var(--secondary);">${diffTitle}</div></div>`;
 
         for (let t of allTurns) {
             const fA = gameData[gA][t], fB = gameData[gB][t];
@@ -441,7 +487,6 @@
                         imgB_Html = `<img src="${urlB_Transformed}" style="border:2px solid var(--primary);">`;
                     }
 
-                    // 使用增強版差異比對 (HSV + 容錯)
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
@@ -466,7 +511,6 @@
         return canvas;
     }
 
-    // --- ACCURACY UPGRADE: HSV Color Helper ---
     function rgbToHsl(r, g, b) {
         r /= 255, g /= 255, b /= 255;
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -484,23 +528,14 @@
         return [h * 360, s, l];
     }
 
-    // --- ACCURACY UPGRADE: Robust Strategy Color Detection ---
     function isStrategyColor(r, g, b) {
-        // 先轉 HSV，對抗光影變化
         const [h, s, l] = rgbToHsl(r, g, b);
-        
-        // 排除太暗(黑)、太亮(白)或太淡(灰)的顏色
         if (l < 0.2 || l > 0.95 || s < 0.25) return false;
-
-        // 紅色範圍 (跨越 0度/360度)
         const isRed = (h >= 340 || h <= 20);
-        // 藍色範圍 (200度 ~ 260度)
         const isBlue = (h >= 200 && h <= 260);
-
         return isRed || isBlue;
     }
 
-    // --- ACCURACY UPGRADE: Neighbor Tolerance Difference ---
     async function generateDiffImage(img1, img2OrCanvas) {
         const w = Math.max(img1.width, img2OrCanvas.width), h = Math.max(img1.height, img2OrCanvas.height);
         const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
@@ -513,37 +548,26 @@
         const data1 = d1.data;
         const data2 = d2.data;
 
-        // 輔助函式：檢查某個像素是否為目標色
-        const checkColor = (idx, data) => {
-            if (idx < 0 || idx >= data.length) return false;
-            return isStrategyColor(data[idx], data[idx+1], data[idx+2]);
-        };
-
         for (let i=0; i<data1.length; i+=4) {
-            // 基本顏色距離
             const r1=data1[i], g1=data1[i+1], b1=data1[i+2]; 
             const r2=data2[i], g2=data2[i+1], b2=data2[i+2];
             const dist = Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
 
             let isDiff = false;
-            let outputGray = true;
 
-            if (dist > 40) { // 提高一點閾值以抗噪
-                const isTargetA = isStrategyColor(r1, g1, b1);
-                const isTargetB = isStrategyColor(r2, g2, b2);
+            if (dist > 40) {
+                let checkDifference = true;
+                if (isStrategyFilterEnabled) {
+                    const isTargetA = isStrategyColor(r1, g1, b1);
+                    const isTargetB = isStrategyColor(r2, g2, b2);
+                    if (!isTargetA && !isTargetB) checkDifference = false;
+                }
 
-                if (isTargetA || isTargetB) {
-                    // 如果本身是策略色，且差異大，先假設是差異
-                    // --- 容錯機制：搜尋周圍 3x3 像素 (Neighbor Search) ---
-                    // 如果在對方圖片的「鄰近位置」找得到相同顏色，視為手震，忽略差異
+                if (checkDifference) {
                     let foundMatch = false;
                     const y = Math.floor((i/4) / w);
                     const x = (i/4) % w;
-                    
-                    // 只有當「我是紅/藍」但「對方該點不是」時，才需要去搜尋對方周圍有沒有我
-                    // 這樣可以避免微小位移造成的 "假消失" 或 "假出現"
-                    
-                    const searchRadius = 1; // 搜尋半徑 1px (3x3)
+                    const searchRadius = 1; 
                     
                     for (let dy = -searchRadius; dy <= searchRadius; dy++) {
                         for (let dx = -searchRadius; dx <= searchRadius; dx++) {
@@ -551,7 +575,6 @@
                             const ny = y + dy, nx = x + dx;
                             if (nx >=0 && nx < w && ny >=0 && ny < h) {
                                 const ni = (ny * w + nx) * 4;
-                                // 檢查 data2 的鄰居是否跟 data1[i] 顏色接近
                                 const nr2=data2[ni], ng2=data2[ni+1], nb2=data2[ni+2];
                                 const ndist = Math.sqrt((r1-nr2)**2+(g1-ng2)**2+(b1-nb2)**2);
                                 if (ndist < 40) { foundMatch = true; break; }
@@ -562,7 +585,6 @@
 
                     if (!foundMatch) {
                         isDiff = true;
-                        outputGray = false;
                     }
                 }
             }
@@ -577,24 +599,21 @@
         ctx.putImageData(target, 0, 0); return new Promise(resolve => c.toBlob(resolve));
     }
 
-    // Helpers
     function performClustering(gameIds, signatures, threshold) { const groups = []; const visited = new Set(); for (let i=0; i<gameIds.length; i++) { if(visited.has(gameIds[i])) continue; const grp = {repId: gameIds[i], members:[gameIds[i]]}; visited.add(gameIds[i]); for(let j=i+1; j<gameIds.length; j++) { if(!visited.has(gameIds[j]) && isStrategySimilar(signatures[gameIds[i]], signatures[gameIds[j]], threshold)) { grp.members.push(gameIds[j]); visited.add(gameIds[j]); } } groups.push(grp); } return groups.sort((a,b)=>b.members.length-a.members.length); }
     function isStrategySimilar(sigA, sigB, threshold) { const len = Math.min(sigA.length, sigB.length); if(len===0) return false; for(let k=0; k<len; k++) { if(sigA[k].turn!==sigB[k].turn) continue; if(hammingDist(sigA[k].hash, sigB[k].hash) > threshold) return false; } return true; }
     function showImgModal(src, text) { document.getElementById('imgModal').style.display='flex'; modalImg.src=src; modalCaption.textContent=text; }
     function loadImage(file) { return new Promise(resolve => { const img=new Image(); img.onload=()=>resolve(img); img.src=URL.createObjectURL(file); }); }
-    function getRotatedHash(img) { const c = preprocessImage(img); let minH=null; for(let a of ANGLES) { const r=rotateCanvas(c,a); const h=calculateHash(r); if(minH===null||h<minH) minH=h; } return minH; }
     
-    // --- ACCURACY UPGRADE: Better Preprocessing ---
+    // 更新：將 ignoreColor 參數傳遞進來
+    function getRotatedHash(img, ignoreColor) { const c = preprocessImage(img); let minH=null; for(let a of ANGLES) { const r=rotateCanvas(c,a); const h=calculateHash(r, ignoreColor); if(minH===null||h<minH) minH=h; } return minH; }
+    
     function preprocessImage(img) { 
         const s=IMG_SIZE; 
         const c=document.createElement('canvas'); 
         c.width=s; c.height=s; 
         const ctx=c.getContext('2d'); 
-        
         ctx.fillStyle='#fff'; 
         ctx.fillRect(0,0,s,s); 
-        
-        // 簡單的縮放邏輯，未來可在此加入 Auto-Crop (自動裁切)
         const sc=Math.min(s/img.naturalWidth, s/img.naturalHeight)*0.9; 
         const w=img.naturalWidth*sc; 
         const h=img.naturalHeight*sc; 
@@ -604,27 +623,30 @@
     
     function rotateCanvas(s,a) { if(a===0) return s; const c=document.createElement('canvas'); c.width=s.width; c.height=s.height; const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.translate(c.width/2, c.height/2); x.rotate(a*Math.PI/180); x.drawImage(s, -c.width/2, -c.height/2); return c; }
     
-    // --- ACCURACY UPGRADE: HSV-aware Hashing ---
-    function calculateHash(c) { 
+    // 更新：Hash 計算支援混色模式
+    function calculateHash(c, ignoreColor) { 
         const s=16; 
         const cv=document.createElement('canvas'); cv.width=s; cv.height=s; 
         const x=cv.getContext('2d'); x.drawImage(c,0,0,s,s); 
         const d=x.getImageData(0,0,s,s).data; 
         let h=""; 
         for(let i=0; i<d.length; i+=4) { 
-            // 使用新的 HSV 判定邏輯來產生 Hash，讓分群也享受到高精度判定
             const r=d[i], g=d[i+1], b=d[i+2];
             if (isStrategyColor(r,g,b)) {
-                // 如果是紅/藍，進一步區分
-                const [hue, sat, lum] = rgbToHsl(r, g, b);
-                if (hue >= 340 || hue <= 20) h+="1"; // Red
-                else if (hue >= 200 && hue <= 260) h+="2"; // Blue
-                else h+="3"; // Other strategy color?
+                // 如果開啟混色模式，所有策略色統一標記為 "1"
+                if (ignoreColor) {
+                    h += "1";
+                } else {
+                    // 否則區分紅藍
+                    const [hue, sat, lum] = rgbToHsl(r, g, b);
+                    if (hue >= 340 || hue <= 20) h+="1"; // Red
+                    else if (hue >= 200 && hue <= 260) h+="2"; // Blue
+                    else h+="3"; 
+                }
             } else {
-                // 非策略色，判斷黑白
                 const avg=(r+g+b)/3;
-                if(avg > 200) h+="0"; // White/Empty
-                else h+="3"; // Black/Ink
+                if(avg > 200) h+="0"; // White
+                else h+="3"; // Ink
             }
         } 
         return h; 
