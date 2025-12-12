@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 賽局演變分析器 Pro (精準比對修正版)</title>
+    <title>AI 賽局演變分析器 (紅藍鎖定版)</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
@@ -24,7 +24,7 @@
         header { text-align: center; margin-bottom: 30px; position: relative; background: var(--card-bg); padding: 30px; border-radius: 24px; box-shadow: var(--shadow); border: var(--glass-border); backdrop-filter: blur(10px); }
         h1 { font-size: 2.2rem; margin: 0 0 10px 0; font-weight: 800; color: var(--text-main); }
         .gradient-text { background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .pro-badge { font-size: 0.5em; vertical-align: middle; background: var(--text-main); color: white; padding: 4px 8px; border-radius: 6px; -webkit-text-fill-color: white; }
+        .pro-badge { font-size: 0.5em; vertical-align: middle; background: #ef4444; color: white; padding: 4px 8px; border-radius: 6px; -webkit-text-fill-color: white; }
         .desc { color: var(--text-light); font-size: 1rem; }
         .btn-help { position: absolute; top: 20px; right: 20px; background: #f1f5f9; color: var(--text-main); border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
         .btn-help:hover { background: var(--primary); color: white; transform: rotate(15deg); }
@@ -54,12 +54,22 @@
         .progress-fill { background: linear-gradient(90deg, var(--primary), var(--secondary)); height: 100%; width: 0%; border-radius: 10px; transition: width 0.3s ease-out; position: relative; }
         .status-text { margin-top: 8px; text-align: right; font-size: 0.85rem; color: var(--text-light); font-weight: 500; }
 
+        /* 新增：結果總結樣式 */
+        .result-summary { margin-bottom: 20px; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.5); padding: 10px 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .result-summary span { color: var(--primary); font-size: 1.4rem; }
+
         .results-list { display: flex; flex-direction: column; gap: 25px; }
         .group-card { background: var(--card-bg); border-radius: 20px; padding: 25px; box-shadow: var(--shadow); border: var(--glass-border); transition: all 0.2s; }
         .group-card.drag-over { border: 2px solid var(--secondary); background: #fff5f9; transform: scale(1.005); }
-        .group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+        
+        /* 修改：群組標題區塊，增加 flex-wrap 讓說明文字可以換行 */
+        .group-header { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
+        .group-title-row { display: flex; justify-content: space-between; align-items: center; }
         .group-title { font-size: 1.25rem; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;}
         .group-badge { background: #e0e7ff; color: var(--primary); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+        
+        /* 新增：歸類原因樣式 */
+        .group-reason { font-size: 0.9rem; color: #64748b; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--secondary); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
 
         .game-row { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; margin-bottom: 15px; position: relative; transition: all 0.2s; cursor: default; display: flex; flex-direction: column; }
         .game-row:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
@@ -112,9 +122,9 @@
         <button class="btn-help" onclick="showHelp()" title="使用說明">?</button>
         <h1>
             <span class="gradient-text">AI 賽局演變分析器</span> 
-            <span class="pro-badge">Pro</span>
+            <span class="pro-badge">Red/Blue Only</span>
         </h1>
-        <p class="desc">智慧分類・人機協作・精準比對</p>
+        <p class="desc">專注識別「紅、藍」賽局策略變化，自動過濾無關雜訊。</p>
     </header>
 
     <div id="helpModal" class="modal-overlay" onclick="if(event.target===this)closeModal('helpModal')">
@@ -124,12 +134,11 @@
                 <button onclick="closeModal('helpModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <p>1. <b>上傳</b>：拖曳 Game_X_Turn_Y 圖片。</p>
-            <p>2. <b>分析</b>：點擊開始分析，可調整嚴格度滑桿重算。</p>
-            <p>3. <b>修正</b>：按住卡片標題旁的 <code>⋮⋮</code> 圖示可拖曳分類。</p>
-            <p>4. <b>比對</b>：選取兩局後點擊比對。
+            <p>2. <b>分析</b>：系統會自動進行策略歸類。</p>
+            <p>3. <b>比對</b>：選取兩局進行比對。
                 <ul>
-                    <li>可輸入角度 (預設 60) 調整 Game B 的顯示方向。</li>
-                    <li>調整後，系統會自動填滿背景，並以「Game A」為基準比較「修正後的 Game B」，消除旋轉邊框造成的誤判。</li>
+                    <li><b>紅藍鎖定</b>：系統只會標記「紅色」或「藍色」的變化。</li>
+                    <li><b>自動抗噪</b>：背景光影、紙張污點或黑色格線的些微位移將被忽略。</li>
                 </ul>
             </p>
         </div>
@@ -159,6 +168,8 @@
         <div class="status-text" id="statusText">準備就緒</div>
     </div>
 
+    <div id="resultSummary" style="display:none;" class="result-summary"></div>
+
     <div id="resultsList" class="results-list"></div>
     <button id="addGroupBtn" class="btn-add-group">➕ 新增一個空群組 (將賽局拖曳至此)</button>
 </div>
@@ -172,7 +183,7 @@
 <div id="compareModal" class="modal-overlay">
     <div class="modal-content">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:15px;">
-            <h2 id="compareTitle" style="margin:0; font-size:1.5rem;">差異比對</h2>
+            <h2 id="compareTitle" style="margin:0; font-size:1.5rem;">紅藍差異比對</h2>
             <button onclick="closeModal('compareModal')" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
         </div>
         
@@ -207,6 +218,7 @@
     const downloadExcelBtn = document.getElementById('downloadExcelBtn'), downloadZipBtn = document.getElementById('downloadZipBtn'), statusContainer = document.getElementById('statusContainer');
     const statusText = document.getElementById('statusText'), progressBar = document.getElementById('progressBar'), resultsList = document.getElementById('resultsList'), addGroupBtn = document.getElementById('addGroupBtn');
     const thresholdRange = document.getElementById('thresholdRange'), thresholdValue = document.getElementById('thresholdValue');
+    const resultSummary = document.getElementById('resultSummary'); // 新增
     const compareBar = document.getElementById('compareBar'), compareInfo = document.getElementById('compareInfo'), startCompareBtn = document.getElementById('startCompareBtn');
     const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
@@ -231,6 +243,7 @@
         if (!imgs.length) return;
         uploadedFiles = [...uploadedFiles, ...imgs]; statusContainer.style.display = 'block'; updateProgress(0, `已載入 ${uploadedFiles.length} 張圖片`);
         analyzeBtn.disabled = false; recalcBtn.style.display = 'none'; downloadExcelBtn.style.display = 'none'; downloadZipBtn.style.display = 'none'; addGroupBtn.style.display = 'none'; resultsList.innerHTML = '';
+        resultSummary.style.display = 'none'; // 重置
         gameSignatures = {}; gameIds = []; clearComparison();
     }
     function updateProgress(percent, text) { progressBar.style.width = `${percent}%`; if(text) statusText.textContent = text; }
@@ -238,7 +251,7 @@
     recalcBtn.addEventListener('click', async () => await runAnalysis(false));
 
     async function runAnalysis(fullRun) {
-        analyzeBtn.disabled = true; recalcBtn.style.display = 'none'; resultsList.innerHTML = ''; clearComparison();
+        analyzeBtn.disabled = true; recalcBtn.style.display = 'none'; resultsList.innerHTML = ''; resultSummary.style.display = 'none'; clearComparison();
         if (fullRun) {
             updateProgress(5, "正在建立索引..."); gameData = {};
             uploadedFiles.forEach(file => { const match = file.name.match(/Game_(\d+)_Turn_(\d+)/i); if (match) { const gId = match[1], tId = parseInt(match[2]); if (!gameData[gId]) gameData[gId] = {}; gameData[gId][tId] = file; } });
@@ -252,6 +265,11 @@
         }
         updateProgress(90, "AI 策略歸類中..."); clusteredGroups = performClustering(gameIds, gameSignatures, parseInt(thresholdRange.value));
         updateProgress(95, "正在產生視覺化報表..."); renderExpandedGroups(clusteredGroups);
+        
+        // 新增：顯示統計結果
+        resultSummary.style.display = 'flex';
+        resultSummary.innerHTML = `<div>📊 分析完成，AI 自動識別出 <span style="font-size:1.5rem; color:var(--primary); font-weight:800; margin:0 5px;">${clusteredGroups.length}</span> 種策略流派</div>`;
+
         updateProgress(100, `分析完成！`); analyzeBtn.disabled = false; downloadExcelBtn.style.display = 'inline-flex'; downloadZipBtn.style.display = 'inline-flex'; addGroupBtn.style.display = 'block';
     }
 
@@ -276,7 +294,24 @@
         resultsList.innerHTML = '';
         groups.forEach((group, idx) => {
             const groupCard = document.createElement('div'); groupCard.className = 'group-card'; groupCard.dataset.index = idx;
-            groupCard.innerHTML = `<div class="group-header"><div class="group-title"><span>🧩 策略模式 ${idx + 1}</span></div><span class="group-badge">包含 ${group.members.length} 局</span></div>`;
+            
+            // 新增：產生歸類原因文字
+            let reasonHtml = '';
+            if (group.repId) {
+                reasonHtml = `<div class="group-reason">🔍 歸類原因：賽局演變特徵與 <b>Game ${group.repId}</b> 高度相似 (視覺差異指數 < ${thresholdRange.value})</div>`;
+            } else {
+                reasonHtml = `<div class="group-reason" style="border-left-color:#94a3b8;">📂 自訂群組 (手動歸類)</div>`;
+            }
+
+            groupCard.innerHTML = `
+                <div class="group-header">
+                    <div class="group-title-row">
+                        <div class="group-title"><span>🧩 策略模式 ${idx + 1}</span></div>
+                        <span class="group-badge">包含 ${group.members.length} 局</span>
+                    </div>
+                    ${reasonHtml}
+                </div>`;
+            
             if (group.members.length === 0) groupCard.innerHTML += `<div style="text-align:center; color:#94a3b8; padding:30px; border:2px dashed #e2e8f0; border-radius:12px;">( 此群組為空，請將分錯的賽局拖曳至此 )</div>`;
             group.members.forEach(gameId => {
                 if(!gameData[gameId]) return;
@@ -326,7 +361,7 @@
     };
     window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
-    // --- 核心修正區塊：比對與圖像處理 ---
+    // --- 核心修改：生成差異圖 (只關注紅藍) ---
     async function renderComparisonResults() {
         const gA = selectedGames[0], gB = selectedGames[1];
         compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在運算中...</div>';
@@ -334,7 +369,7 @@
 
         const turnsA = Object.keys(gameData[gA]).map(Number), turnsB = Object.keys(gameData[gB]).map(Number);
         const allTurns = Array.from(new Set([...turnsA, ...turnsB])).sort((a,b)=>a-b);
-        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>Game ${gB} (檢視)</div><div style="color:var(--secondary);">差異 (Diff)</div></div>`;
+        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>Game ${gB} (檢視)</div><div style="color:var(--secondary);">策略差異 (紅/藍)</div></div>`;
 
         for (let t of allTurns) {
             const fA = gameData[gA][t], fB = gameData[gB][t];
@@ -347,12 +382,9 @@
                     const imgObjA = await loadImage(fA);
                     const imgObjB = await loadImage(fB);
                     
-                    // 1. 產生修正視角後的 Game B (已填滿背景)
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
                     imgB_Html = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
 
-                    // 2. 使用「修正後的 B」與「原始 A」進行比對
-                    // 這樣旋轉產生的角落空白已經是白色，不會被視為差異
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
@@ -367,7 +399,6 @@
         canvas.width = sourceImg.width; canvas.height = sourceImg.height;
         const ctx = canvas.getContext('2d');
         
-        // [修正] 先填滿白色背景，避免旋轉後出現透明角落導致比對錯誤
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -380,6 +411,16 @@
         return canvas;
     }
 
+    // [核心邏輯] 判斷是否為「策略關注色 (紅色或藍色)」
+    function isStrategyColor(r, g, b) {
+        // 紅色判定: R 明顯大於 G 和 B，且亮度足夠
+        const isRed = (r > 100 && r > g + 20 && r > b + 20);
+        // 藍色判定: B 明顯大於 R 和 G，且亮度足夠
+        const isBlue = (b > 100 && b > r + 20 && b > g + 20);
+        return isRed || isBlue;
+    }
+
+    // [核心邏輯] 差異圖生成：只標記紅藍變化的區域
     async function generateDiffImage(img1, img2OrCanvas) {
         const w = Math.max(img1.width, img2OrCanvas.width), h = Math.max(img1.height, img2OrCanvas.height);
         const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
@@ -390,9 +431,32 @@
         
         const target = ctx.createImageData(w, h);
         for (let i=0; i<d1.data.length; i+=4) {
-            const r1=d1.data[i], g1=d1.data[i+1], b1=d1.data[i+2]; const r2=d2.data[i], g2=d2.data[i+1], b2=d2.data[i+2];
-            if (Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2) > 30) { target.data[i]=236; target.data[i+1]=72; target.data[i+2]=153; target.data[i+3]=255; }
-            else { const gray = (r1+g1+b1)/3; target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; }
+            const r1=d1.data[i], g1=d1.data[i+1], b1=d1.data[i+2]; 
+            const r2=d2.data[i], g2=d2.data[i+1], b2=d2.data[i+2];
+            
+            // 計算顏色距離
+            const dist = Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
+
+            // 1. 只有差異大於閾值才處理
+            if (dist > 35) {
+                // 2. 關鍵過濾：只有當「原圖」或「新圖」的該像素是紅色或藍色時，才視為有效差異
+                // 這樣可以忽略背景變暗(白變灰)、黑線變模糊(黑變灰)等非策略差異
+                const isTargetA = isStrategyColor(r1, g1, b1);
+                const isTargetB = isStrategyColor(r2, g2, b2);
+
+                if (isTargetA || isTargetB) {
+                    // 有效差異 (紅/藍改變) -> 標記為粉紅色
+                    target.data[i]=236; target.data[i+1]=72; target.data[i+2]=153; target.data[i+3]=255; 
+                } else {
+                    // 無效差異 (背景雜訊) -> 轉為灰階顯示
+                    const gray = (r1+g1+b1)/3; 
+                    target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; 
+                }
+            } else {
+                // 無差異 -> 轉為灰階
+                const gray = (r1+g1+b1)/3; 
+                target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; 
+            }
         }
         ctx.putImageData(target, 0, 0); return new Promise(resolve => c.toBlob(resolve));
     }
