@@ -53,22 +53,17 @@
         .progress-track { background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden; position: relative; }
         .progress-fill { background: linear-gradient(90deg, var(--primary), var(--secondary)); height: 100%; width: 0%; border-radius: 10px; transition: width 0.3s ease-out; position: relative; }
         .status-text { margin-top: 8px; text-align: right; font-size: 0.85rem; color: var(--text-light); font-weight: 500; }
-
-        /* 新增：結果總結樣式 */
+        
         .result-summary { margin-bottom: 20px; font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.5); padding: 10px 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
         .result-summary span { color: var(--primary); font-size: 1.4rem; }
 
         .results-list { display: flex; flex-direction: column; gap: 25px; }
         .group-card { background: var(--card-bg); border-radius: 20px; padding: 25px; box-shadow: var(--shadow); border: var(--glass-border); transition: all 0.2s; }
         .group-card.drag-over { border: 2px solid var(--secondary); background: #fff5f9; transform: scale(1.005); }
-        
-        /* 修改：群組標題區塊，增加 flex-wrap 讓說明文字可以換行 */
         .group-header { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; }
         .group-title-row { display: flex; justify-content: space-between; align-items: center; }
         .group-title { font-size: 1.25rem; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px;}
         .group-badge { background: #e0e7ff; color: var(--primary); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
-        
-        /* 新增：歸類原因樣式 */
         .group-reason { font-size: 0.9rem; color: #64748b; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--secondary); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
 
         .game-row { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 15px; margin-bottom: 15px; position: relative; transition: all 0.2s; cursor: default; display: flex; flex-direction: column; }
@@ -104,15 +99,26 @@
         .diff-toolbar { display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px; align-items: center; flex-wrap: wrap;}
         .diff-btn { background: white; border: 1px solid #cbd5e1; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; transition:0.2s;}
         .diff-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+        .diff-btn.active { background: var(--secondary); color: white; border-color: var(--secondary); }
         
         .angle-input { width: 60px; padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-weight: bold; color: var(--text-main); }
         .angle-input:focus { outline: none; border-color: var(--primary); }
         
+        /* Onion Skin Controls */
+        .onion-controls { display: flex; align-items: center; gap: 10px; margin-left: 15px; padding-left: 15px; border-left: 2px solid #cbd5e1; }
+        .onion-slider-group { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; opacity: 0.5; pointer-events: none; transition: opacity 0.2s; }
+        .onion-slider-group.active { opacity: 1; pointer-events: auto; }
+
         .diff-grid { display: grid; grid-template-columns: 80px 1fr 1fr 1fr; gap: 15px; border-bottom: 1px solid #eee; padding: 15px 0; align-items: center; }
         .diff-header { font-weight: bold; color: var(--text-light); text-align: center; background: #f8fafc; padding: 10px; border-radius: 8px; }
-        .diff-img-wrap { text-align: center; }
-        .diff-img-wrap img { width: 100%; border-radius: 6px; border: 1px solid #eee; }
+        .diff-img-wrap { text-align: center; position: relative; }
+        .diff-img-wrap img { width: 100%; border-radius: 6px; border: 1px solid #eee; display: block; }
         .diff-mark { border: 2px solid var(--secondary); box-shadow: 0 0 10px rgba(236, 72, 153, 0.3); }
+
+        /* Onion Skin Overlay Styles */
+        .onion-container { position: relative; width: 100%; display: block; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; }
+        .onion-layer-base { width: 100%; display: block; }
+        .onion-layer-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; opacity: 0.5; transition: opacity 0.1s linear; }
     </style>
 </head>
 <body>
@@ -135,12 +141,8 @@
             </div>
             <p>1. <b>上傳</b>：拖曳 Game_X_Turn_Y 圖片。</p>
             <p>2. <b>分析</b>：系統會自動進行策略歸類。</p>
-            <p>3. <b>比對</b>：選取兩局進行比對。
-                <ul>
-                    <li><b>紅藍鎖定</b>：系統只會標記「紅色」或「藍色」的變化。</li>
-                    <li><b>自動抗噪</b>：背景光影、紙張污點或黑色格線的些微位移將被忽略。</li>
-                </ul>
-            </p>
+            <p>3. <b>比對</b>：選取兩局進行比對。</p>
+            <p>4. <b>洋蔥皮模式</b>：在比對視窗開啟 🧅 按鈕，即可將兩張圖疊加顯示，並調整透明度以觀察細微位移。</p>
         </div>
     </div>
 
@@ -188,12 +190,22 @@
         </div>
         
         <div class="diff-toolbar">
-            <span>每次旋轉:</span>
-            <input type="number" id="rotateStepInput" value="60" min="1" max="180" class="angle-input">
-            <span style="font-size:0.9rem; margin-right:10px;">度</span>
-            
-            <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
-            <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <span>每次旋轉:</span>
+                <input type="number" id="rotateStepInput" value="60" min="1" max="180" class="angle-input">
+                <span style="font-size:0.9rem;">度</span>
+                <button class="diff-btn" onclick="rotateCompareImage()">⟳ 旋轉</button>
+                <button class="diff-btn" onclick="mirrorCompareImage()">↔️ 鏡像</button>
+            </div>
+
+            <div class="onion-controls">
+                <button id="onionToggleBtn" class="diff-btn" onclick="toggleOnionMode()">🧅 洋蔥皮模式</button>
+                <div id="onionSliderGroup" class="onion-slider-group">
+                    <span>透明度</span>
+                    <input type="range" id="onionOpacityRange" min="0" max="100" value="50" oninput="updateOnionOpacity(this.value)">
+                    <span id="onionOpacityVal">50%</span>
+                </div>
+            </div>
             
             <div id="diffStatus" style="font-size:0.85rem; color:#64748b; font-weight:normal; margin-left:auto;">(原始視角)</div>
         </div>
@@ -218,16 +230,26 @@
     const downloadExcelBtn = document.getElementById('downloadExcelBtn'), downloadZipBtn = document.getElementById('downloadZipBtn'), statusContainer = document.getElementById('statusContainer');
     const statusText = document.getElementById('statusText'), progressBar = document.getElementById('progressBar'), resultsList = document.getElementById('resultsList'), addGroupBtn = document.getElementById('addGroupBtn');
     const thresholdRange = document.getElementById('thresholdRange'), thresholdValue = document.getElementById('thresholdValue');
-    const resultSummary = document.getElementById('resultSummary'); // 新增
+    const resultSummary = document.getElementById('resultSummary');
     const compareBar = document.getElementById('compareBar'), compareInfo = document.getElementById('compareInfo'), startCompareBtn = document.getElementById('startCompareBtn');
     const compareModal = document.getElementById('compareModal'), compareContent = document.getElementById('compareContent'), diffStatus = document.getElementById('diffStatus');
     const modalImg = document.getElementById('modalImg'), modalCaption = document.getElementById('modalCaption');
     const rotateStepInput = document.getElementById('rotateStepInput');
+    
+    // Onion Skin Elements
+    const onionToggleBtn = document.getElementById('onionToggleBtn');
+    const onionSliderGroup = document.getElementById('onionSliderGroup');
+    const onionOpacityRange = document.getElementById('onionOpacityRange');
+    const onionOpacityVal = document.getElementById('onionOpacityVal');
 
     let uploadedFiles = [], clusteredGroups = [], gameData = {}, gameSignatures = {}, gameIds = [], selectedGames = [];
     const IMG_SIZE = 150, ANGLES = [0, 60, 120, 180, 240, 300];
     let currentCompareRotation = 0;
     let currentCompareMirror = false;
+    
+    // Onion Skin State
+    let isOnionMode = false;
+    let currentOnionOpacity = 0.5;
 
     thresholdRange.addEventListener('input', (e) => thresholdValue.textContent = e.target.value);
     thresholdRange.addEventListener('change', () => { if(gameIds.length > 0) recalcBtn.style.display = 'inline-flex'; });
@@ -243,7 +265,7 @@
         if (!imgs.length) return;
         uploadedFiles = [...uploadedFiles, ...imgs]; statusContainer.style.display = 'block'; updateProgress(0, `已載入 ${uploadedFiles.length} 張圖片`);
         analyzeBtn.disabled = false; recalcBtn.style.display = 'none'; downloadExcelBtn.style.display = 'none'; downloadZipBtn.style.display = 'none'; addGroupBtn.style.display = 'none'; resultsList.innerHTML = '';
-        resultSummary.style.display = 'none'; // 重置
+        resultSummary.style.display = 'none';
         gameSignatures = {}; gameIds = []; clearComparison();
     }
     function updateProgress(percent, text) { progressBar.style.width = `${percent}%`; if(text) statusText.textContent = text; }
@@ -266,7 +288,6 @@
         updateProgress(90, "AI 策略歸類中..."); clusteredGroups = performClustering(gameIds, gameSignatures, parseInt(thresholdRange.value));
         updateProgress(95, "正在產生視覺化報表..."); renderExpandedGroups(clusteredGroups);
         
-        // 新增：顯示統計結果
         resultSummary.style.display = 'flex';
         resultSummary.innerHTML = `<div>📊 分析完成，AI 自動識別出 <span style="font-size:1.5rem; color:var(--primary); font-weight:800; margin:0 5px;">${clusteredGroups.length}</span> 種策略流派</div>`;
 
@@ -294,8 +315,6 @@
         resultsList.innerHTML = '';
         groups.forEach((group, idx) => {
             const groupCard = document.createElement('div'); groupCard.className = 'group-card'; groupCard.dataset.index = idx;
-            
-            // 新增：產生歸類原因文字
             let reasonHtml = '';
             if (group.repId) {
                 reasonHtml = `<div class="group-reason">🔍 歸類原因：賽局演變特徵與 <b>Game ${group.repId}</b> 高度相似 (視覺差異指數 < ${thresholdRange.value})</div>`;
@@ -341,6 +360,12 @@
     startCompareBtn.addEventListener('click', () => {
         if (selectedGames.length !== 2) return;
         currentCompareRotation = 0; currentCompareMirror = false; 
+        
+        // 重置 Onion Mode 狀態
+        isOnionMode = false;
+        onionToggleBtn.classList.remove('active');
+        onionSliderGroup.classList.remove('active');
+
         updateDiffStatus();
         compareModal.style.display = 'flex';
         document.getElementById('compareTitle').innerText = `比對: Game ${selectedGames[0]} vs ${selectedGames[1]}`;
@@ -361,7 +386,26 @@
     };
     window.mirrorCompareImage = function() { currentCompareMirror = !currentCompareMirror; updateDiffStatus(); renderComparisonResults(); };
 
-    // --- 核心修改：生成差異圖 (只關注紅藍) ---
+    // --- Onion Skin Logic ---
+    window.toggleOnionMode = function() {
+        isOnionMode = !isOnionMode;
+        if (isOnionMode) {
+            onionToggleBtn.classList.add('active');
+            onionSliderGroup.classList.add('active');
+        } else {
+            onionToggleBtn.classList.remove('active');
+            onionSliderGroup.classList.remove('active');
+        }
+        renderComparisonResults();
+    };
+
+    window.updateOnionOpacity = function(val) {
+        currentOnionOpacity = val / 100;
+        onionOpacityVal.textContent = `${val}%`;
+        const overlays = document.querySelectorAll('.onion-layer-overlay');
+        overlays.forEach(img => img.style.opacity = currentOnionOpacity);
+    };
+
     async function renderComparisonResults() {
         const gA = selectedGames[0], gB = selectedGames[1];
         compareContent.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;">正在運算中...</div>';
@@ -369,11 +413,17 @@
 
         const turnsA = Object.keys(gameData[gA]).map(Number), turnsB = Object.keys(gameData[gB]).map(Number);
         const allTurns = Array.from(new Set([...turnsA, ...turnsB])).sort((a,b)=>a-b);
-        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>Game ${gB} (檢視)</div><div style="color:var(--secondary);">策略差異 (紅/藍)</div></div>`;
+        
+        // 如果是 Onion Mode，標題稍微不同
+        const middleTitle = isOnionMode ? `疊圖模式 (A+B)` : `Game ${gB} (檢視)`;
+        let html = `<div class="diff-grid diff-header"><div>回合</div><div>Game ${gA} (基準)</div><div>${middleTitle}</div><div style="color:var(--secondary);">策略差異 (紅/藍)</div></div>`;
 
         for (let t of allTurns) {
             const fA = gameData[gA][t], fB = gameData[gB][t];
-            let imgA = fA ? `<img src="${URL.createObjectURL(fA)}">` : '<span style="color:#ccc">無</span>';
+            
+            // 預備圖片 URL
+            const urlA = fA ? URL.createObjectURL(fA) : null;
+            let imgA_Html = urlA ? `<img src="${urlA}">` : '<span style="color:#ccc">無</span>';
             let imgB_Html = '<span style="color:#ccc">無</span>';
             let diffHtml = '<span style="color:#ccc">-</span>';
 
@@ -383,13 +433,26 @@
                     const imgObjB = await loadImage(fB);
                     
                     const transformedCanvasB = createTransformedCanvas(imgObjB, currentCompareRotation, currentCompareMirror);
-                    imgB_Html = `<img src="${transformedCanvasB.toDataURL()}" style="border:2px solid var(--primary);">`;
+                    const urlB_Transformed = transformedCanvasB.toDataURL();
+
+                    if (isOnionMode) {
+                        // 洋蔥皮模式：顯示 A 和 B 的疊加
+                        // 底層: A, 上層: B (Transformed)
+                        imgB_Html = `
+                            <div class="onion-container">
+                                <img src="${urlA}" class="onion-layer-base">
+                                <img src="${urlB_Transformed}" class="onion-layer-overlay" style="opacity:${currentOnionOpacity}">
+                            </div>`;
+                    } else {
+                        // 一般模式：只顯示 B (Transformed)
+                        imgB_Html = `<img src="${urlB_Transformed}" style="border:2px solid var(--primary);">`;
+                    }
 
                     const diffBlob = await generateDiffImage(imgObjA, transformedCanvasB);
                     diffHtml = `<img src="${URL.createObjectURL(diffBlob)}" class="diff-mark">`;
                 } catch(e) { console.error(e); }
             }
-            html += `<div class="diff-grid diff-row"><div style="text-align:center; font-weight:bold;">T${t}</div><div class="diff-img-wrap">${imgA}</div><div class="diff-img-wrap">${imgB_Html}</div><div class="diff-img-wrap">${diffHtml}</div></div>`;
+            html += `<div class="diff-grid diff-row"><div style="text-align:center; font-weight:bold;">T${t}</div><div class="diff-img-wrap">${imgA_Html}</div><div class="diff-img-wrap">${imgB_Html}</div><div class="diff-img-wrap">${diffHtml}</div></div>`;
         }
         compareContent.innerHTML = html;
     }
@@ -411,16 +474,12 @@
         return canvas;
     }
 
-    // [核心邏輯] 判斷是否為「策略關注色 (紅色或藍色)」
     function isStrategyColor(r, g, b) {
-        // 紅色判定: R 明顯大於 G 和 B，且亮度足夠
         const isRed = (r > 100 && r > g + 20 && r > b + 20);
-        // 藍色判定: B 明顯大於 R 和 G，且亮度足夠
         const isBlue = (b > 100 && b > r + 20 && b > g + 20);
         return isRed || isBlue;
     }
 
-    // [核心邏輯] 差異圖生成：只標記紅藍變化的區域
     async function generateDiffImage(img1, img2OrCanvas) {
         const w = Math.max(img1.width, img2OrCanvas.width), h = Math.max(img1.height, img2OrCanvas.height);
         const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d');
@@ -434,26 +493,19 @@
             const r1=d1.data[i], g1=d1.data[i+1], b1=d1.data[i+2]; 
             const r2=d2.data[i], g2=d2.data[i+1], b2=d2.data[i+2];
             
-            // 計算顏色距離
             const dist = Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
 
-            // 1. 只有差異大於閾值才處理
             if (dist > 35) {
-                // 2. 關鍵過濾：只有當「原圖」或「新圖」的該像素是紅色或藍色時，才視為有效差異
-                // 這樣可以忽略背景變暗(白變灰)、黑線變模糊(黑變灰)等非策略差異
                 const isTargetA = isStrategyColor(r1, g1, b1);
                 const isTargetB = isStrategyColor(r2, g2, b2);
 
                 if (isTargetA || isTargetB) {
-                    // 有效差異 (紅/藍改變) -> 標記為粉紅色
                     target.data[i]=236; target.data[i+1]=72; target.data[i+2]=153; target.data[i+3]=255; 
                 } else {
-                    // 無效差異 (背景雜訊) -> 轉為灰階顯示
                     const gray = (r1+g1+b1)/3; 
                     target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; 
                 }
             } else {
-                // 無差異 -> 轉為灰階
                 const gray = (r1+g1+b1)/3; 
                 target.data[i]=gray; target.data[i+1]=gray; target.data[i+2]=gray; target.data[i+3]=50; 
             }
@@ -461,7 +513,7 @@
         ctx.putImageData(target, 0, 0); return new Promise(resolve => c.toBlob(resolve));
     }
 
-    // Helpers (Clustering, etc.)
+    // Helpers
     function performClustering(gameIds, signatures, threshold) { const groups = []; const visited = new Set(); for (let i=0; i<gameIds.length; i++) { if(visited.has(gameIds[i])) continue; const grp = {repId: gameIds[i], members:[gameIds[i]]}; visited.add(gameIds[i]); for(let j=i+1; j<gameIds.length; j++) { if(!visited.has(gameIds[j]) && isStrategySimilar(signatures[gameIds[i]], signatures[gameIds[j]], threshold)) { grp.members.push(gameIds[j]); visited.add(gameIds[j]); } } groups.push(grp); } return groups.sort((a,b)=>b.members.length-a.members.length); }
     function isStrategySimilar(sigA, sigB, threshold) { const len = Math.min(sigA.length, sigB.length); if(len===0) return false; for(let k=0; k<len; k++) { if(sigA[k].turn!==sigB[k].turn) continue; if(hammingDist(sigA[k].hash, sigB[k].hash) > threshold) return false; } return true; }
     function showImgModal(src, text) { document.getElementById('imgModal').style.display='flex'; modalImg.src=src; modalCaption.textContent=text; }
