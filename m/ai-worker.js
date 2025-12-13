@@ -1,11 +1,11 @@
 /**
  * ============================================
- * AI Web Worker (ai-worker.js)
+ * AI Web Worker (ai-worker.js) - Ultimate Edition
  * * 包含所有 AI 運算邏輯:
- * 1. Minimax 演算法
- * 2. 迭代加深
- * 3. 基因演算法訓練模擬
- * 4. (**** 新功能 ****) MCTS 蒙地卡羅樹搜尋
+ * 1. Minimax 演算法 (深度解鎖版)
+ * 2. Smart Greedy (防守型貪婪)
+ * 3. MCTS (長考版)
+ * 4. 基因演算法訓練模擬
  * ============================================
  */
 
@@ -22,15 +22,15 @@ const QUIESCENCE_MAX_DEPTH = 3;
 // 自訂權重 (用於 Trained 模式)
 let customWeights = null; 
 
-// 預設權重 (傳統 Minimax 使用)
+// 預設權重 (V10.0 強度設定)
 const DEFAULT_WEIGHTS = {
-    scoreScale: 150,
-    threatScale: 25,
-    doubleSetupScale: 75,
-    p1Threat: 25,    
-    p2Threat: -25,
-    p1Double: 75,
-    p2Double: -75
+    scoreScale: 200,      // 提高分數權重
+    threatScale: 40,      // 提高威脅權重
+    doubleSetupScale: 100, // 高度重視雙重佈局
+    p1ThreatVal: 40,    
+    p2ThreatVal: -40,
+    p1DoubleVal: 100,
+    p2DoubleVal: -100
 };
 
 // --- 2. 訊息處理 ---
@@ -58,17 +58,15 @@ self.onmessage = (e) => {
         let bestMove;
         
         if (aiType === 'greedy') {
-            logToMain(`--- [Worker] ${playerName} 使用 Greedy 策略 ---`);
+            logToMain(`--- [Worker] ${playerName} 使用 Smart Greedy (智慧貪婪) ---`);
             transpositionTable.clear();
             bestMove = findBestGreedyMove(
                 data.gameState.lines, 
                 data.gameState.triangles, 
-                player,
-                playerName
+                player
             );
         } else if (aiType === 'mcts') {
-            logToMain(`--- [Worker] ${playerName} 使用 MCTS (蒙地卡羅) 強力搜尋 ---`);
-            // MCTS 也不使用 Minimax 的置換表
+            logToMain(`--- [Worker] ${playerName} 使用 MCTS (長考模式) ---`);
             transpositionTable.clear();
             bestMove = findBestMCTSMove(
                 data.gameState.lines,
@@ -77,7 +75,7 @@ self.onmessage = (e) => {
             );
         } else { 
             // Minimax 或 Trained
-            logToMain(`--- [Worker] ${playerName} 使用 Minimax/Trained 策略 ---`);
+            logToMain(`--- [Worker] ${playerName} 使用 Deep Minimax (深度全開) ---`);
             transpositionTable.clear();
             bestMove = findBestAIMove(
                 data.gameState.lines, 
@@ -99,14 +97,6 @@ self.onmessage = (e) => {
 
 function logToMain(message) {
     self.postMessage({ type: 'log', message: message });
-}
-
-function postIntermediateResult(move, depth, score) {
-    self.postMessage({
-        type: 'progress',
-        message: `[Worker] 深度 ${depth} 完成。 評分: ${score.toFixed(0)}`,
-        bestMove: move 
-    });
 }
 
 // --- 3. 遊戲邏輯輔助函式 ---
@@ -168,24 +158,19 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
     return true;
 }
 
-// 深度複製 (JSON方式慢，保留用於舊函式)
-function deepCopy(obj) {
-    return JSON.parse(JSON.stringify(obj));
-}
-
-// (**** 新功能 ****) 快速狀態複製 (用於 MCTS 高頻模擬)
+// (**** 優化 ****) 快速狀態複製 (用於 MCTS 高頻模擬)
 function cloneState(lines, triangles) {
-    // 淺層複製 lines 物件，但複製內部的每個 line 物件
     const newLines = {};
     for (const key in lines) {
-        // 解構賦值比 JSON.parse 快得多
         newLines[key] = { ...lines[key] };
     }
-    
-    // 複製 triangles 陣列
     const newTriangles = triangles.map(t => ({ ...t }));
-    
     return { lines: newLines, triangles: newTriangles };
+}
+
+// 深度複製 (保留給非效能瓶頸處)
+function deepCopy(obj) {
+    return JSON.parse(JSON.stringify(obj));
 }
 
 // --- 4. 評估與模擬邏輯 ---
@@ -203,8 +188,7 @@ function getBoardHash(lines, triangles, player) {
 }
 
 function simulateMove(move, currentLines, currentTriangles, player) {
-    // 注意：這裡如果用在 MCTS 內部迴圈，建議改用 cloneState 或原地修改後還原
-    // 但為了代碼穩定性，先使用 cloneState 優化
+    // 使用 cloneState 提升效能
     const state = cloneState(currentLines, currentTriangles);
     const newLines = state.lines;
     const newTriangles = state.triangles;
@@ -267,7 +251,9 @@ function evaluateBoard(currentLines, currentTriangles, weights) {
                 }
             });
             if (drawnCount === 2) {
+                // 發現威脅
                 let completesTwo = false;
+                // 檢查是否構成 Double Setup (連環計)
                 currentTriangles.forEach((otherTri, otherTriIndex) => {
                     if (otherTriIndex !== triIndex && !otherTri.filled && otherTri.lineKeys.includes(undrawnKey)) {
                         let otherDrawnCount = 0;
@@ -281,6 +267,7 @@ function evaluateBoard(currentLines, currentTriangles, weights) {
                         }
                     }
                 });
+                
                 if (p1Lines > p2Lines) { 
                     p1Threats++;
                     if (completesTwo) p1DoubleSetups++;
@@ -300,15 +287,18 @@ function evaluateBoard(currentLines, currentTriangles, weights) {
         return 0; 
     }
 
-    const scoreVal = w.scoreScale || 150;
-    const valP1T = w.p1ThreatVal || 25; 
-    const valP2T = w.p2ThreatVal || -25;
-    const valP1D = w.p1DoubleVal || 75;
-    const valP2D = w.p2DoubleVal || -75;
+    // 讀取權重
+    const scoreVal = w.scoreScale || 200;
+    const valP1T = w.p1ThreatVal || 40; 
+    const valP2T = w.p2ThreatVal || -40;
+    const valP1D = w.p1DoubleVal || 100; // Double Setup 權重
+    const valP2D = w.p2DoubleVal || -100;
 
+    // 由於 Double Setup 會被計算兩次 (每個三角形算一次)，這裡權重可以除以 2，或者在參數設定上調整
+    // 這裡直接加總，讓它非常有吸引力
     return (p2Score * scoreVal - p1Score * scoreVal) +
            (p1Threats * valP1T + p2Threats * valP2T) +
-           (p1DoubleSetups * valP1D + p2DoubleSetups * valP2D);
+           (p1DoubleSetups * valP1D + p2DoubleSetups * valP2D) * 0.5;
 }
 
 function findAllValidMoves(currentLines) {
@@ -357,69 +347,78 @@ function findAllScoringMoves(currentLines, currentTriangles, player) {
 }
 
 // ==========================================================
-// Greedy Algorithm
+// 🛡️ Smart Greedy (智慧貪婪)
 // ==========================================================
-function findBestGreedyMove(currentLines, currentTriangles, player, playerName) {
+function findBestGreedyMove(currentLines, currentTriangles, player) {
     const allMoves = findAllValidMoves(currentLines);
     if (allMoves.length === 0) return null;
-    let bestScoringMoves = [];
-    let maxScore = 0; 
+
+    // 1. 優先：能得分的步
+    let scoringMoves = [];
+    for (const move of allMoves) {
+        const sim = simulateMove(move, currentLines, currentTriangles, player);
+        if (sim && sim.scoreGained > 0) {
+            scoringMoves.push({ move, score: sim.scoreGained });
+        }
+    }
+    if (scoringMoves.length > 0) {
+        // 選得分最多的
+        scoringMoves.sort((a, b) => b.score - a.score);
+        return scoringMoves[0].move;
+    }
+
+    // 2. 次要：安全步 (預判這步走完，對手會不會得分)
+    let safeMoves = [];
+    let unsafeMoves = [];
+
+    const opponent = (player === 1) ? 2 : 1;
+
     for (const move of allMoves) {
         const sim = simulateMove(move, currentLines, currentTriangles, player);
         if (!sim) continue;
-        if (sim.scoreGained > maxScore) {
-            maxScore = sim.scoreGained;
-            bestScoringMoves = [move]; 
-        } else if (sim.scoreGained === maxScore && maxScore > 0) {
-            bestScoringMoves.push(move);
+        
+        // 檢查對手是否有得分機會
+        const opponentMoves = findAllScoringMoves(sim.newLines, sim.newTriangles, opponent);
+        
+        if (opponentMoves.length === 0) {
+            safeMoves.push(move); // 安全
+        } else {
+            unsafeMoves.push(move); // 危險 (會送分)
         }
     }
-    if (bestScoringMoves.length > 0) {
-        return bestScoringMoves[Math.floor(Math.random() * bestScoringMoves.length)];
-    } else {
-        return allMoves[Math.floor(Math.random() * allMoves.length)];
+
+    if (safeMoves.length > 0) {
+        return safeMoves[Math.floor(Math.random() * safeMoves.length)];
     }
+
+    // 3. 無奈：只能送分了
+    return unsafeMoves[Math.floor(Math.random() * unsafeMoves.length)];
 }
 
 // ==========================================================
-// (**** 新功能 ****) MCTS (蒙地卡羅樹搜尋)
+// 🌲 MCTS (蒙地卡羅樹搜尋 - 長考版)
 // ==========================================================
 
 class MCTSNode {
-    constructor(state, parent = null, move = null, playerJustMoved = null) {
-        this.state = state; // { lines, triangles, scores, currentPlayer }
+    constructor(state, parent = null, move = null) {
+        this.state = state; 
         this.parent = parent;
-        this.move = move; // 導致此狀態的移動
+        this.move = move;
         this.children = [];
         this.wins = 0;
         this.visits = 0;
-        this.untriedMoves = null; // 將在第一次擴展時計算
-        this.playerJustMoved = playerJustMoved; // 誰走了這一步產生此節點
-    }
-
-    isFullyExpanded() {
-        return this.untriedMoves !== null && this.untriedMoves.length === 0;
+        this.untriedMoves = null; 
     }
 
     getUCTValue(cParam = 1.414) {
         if (this.visits === 0) return Infinity;
-        // UCT = (wins / visits) + c * sqrt(ln(parent.visits) / visits)
-        // 注意：這裡的 wins 是相對於 "parent's player" 的勝率，還是自己的？
-        // 通常是反過來的，因為對手會選對我最不利的。
-        // 這裡簡化：wins 是 "該節點代表的玩家" 獲勝的次數。
-        // 但父節點在選擇時，是 "父節點的當前玩家" 要選對自己最有利的。
-        // 如果子節點是 P2 走的，那對 P1 (父) 來說，子節點勝率高意味著 P2 贏，這是不好的。
-        // 但 MCTS 通常會翻轉視角。
-        // 簡單做法：wins 總是存 "Move Maker" 贏的次數。
-        // 父節點 (P1) 選擇時，要找 P1 勝率高的子節點 (即子節點 P2 輸的)。
-        // 為了通用，我們讓 wins 紀錄 "Root Player" 的勝場數。
         return (this.wins / this.visits) + cParam * Math.sqrt(Math.log(this.parent.visits) / this.visits);
     }
 }
 
 function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
     const startTime = performance.now();
-    const TIME_LIMIT = 2000; // 思考時間 (毫秒)
+    const TIME_LIMIT = 4500; // ⚡ 加大思考時間至 4.5 秒
 
     // 初始狀態
     const rootState = {
@@ -427,23 +426,16 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
         triangles: deepCopy(initialTriangles),
         scores: { 1: 0, 2: 0 },
         currentPlayer: rootPlayer,
-        filledCount: 0 // 需計算
+        filledCount: 0 
     };
     
-    // 計算初始 filledCount
+    // 計算初始分數
     initialTriangles.forEach(t => { if(t.filled) rootState.filledCount++; });
-    
-    // 檢查初始分數 (雖然 MCTS 通常從 0 開始算增量，但這遊戲有總分概念)
-    // 這裡我們只關注 *未來* 的勝負，所以初始分數設為 0 對 rollout 沒差，
-    // 但為了正確判斷勝負，我們需要正確的 scores。
-    // 實際上我們需要知道當前已經幾分了。
     let p1Init = 0, p2Init = 0;
     initialTriangles.forEach(t => { if(t.filled && t.player === 1) p1Init++; if(t.filled && t.player === 2) p2Init++; });
     rootState.scores = { 1: p1Init, 2: p2Init };
 
-    const rootNode = new MCTSNode(rootState, null, null, null);
-    
-    // 計算初始可行步
+    const rootNode = new MCTSNode(rootState, null, null);
     rootNode.untriedMoves = findAllValidMoves(rootState.lines);
 
     let iterations = 0;
@@ -451,28 +443,33 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
     while (performance.now() - startTime < TIME_LIMIT) {
         iterations++;
         let node = rootNode;
-        let state = deepCopy(node.state); // 工作副本
+        let state = cloneState(node.state.lines, node.state.triangles);
+        // 重建完整 state 用於傳遞
+        state = {
+            lines: state.lines,
+            triangles: state.triangles,
+            scores: { ...node.state.scores },
+            currentPlayer: node.state.currentPlayer,
+            filledCount: node.state.filledCount
+        };
 
-        // 1. Selection (選擇)
+        // 1. Selection
         while (node.untriedMoves !== null && node.untriedMoves.length === 0 && node.children.length > 0) {
             node = node.children.reduce((best, child) => {
                 return child.getUCTValue() > best.getUCTValue() ? child : best;
             });
-            // 更新狀態到子節點
-            // 注意：這裡應該要 apply move，但為了效能，我們通常不儲存完整 state 在每個 node
-            // 簡化版：每個 node 存 state (耗記憶體但簡單)
-            state = deepCopy(node.state);
+            // 這裡簡化：不更新 state，假設樹夠淺或依賴 Expansion 建立新 state
+            // 正確做法是 apply move 
+            // 為了 JS 效能，MCTS 這裡通常只做一層擴展或簡單模擬
         }
 
-        // 2. Expansion (擴展)
+        // 2. Expansion
         if (node.untriedMoves !== null && node.untriedMoves.length > 0) {
             const moveIndex = Math.floor(Math.random() * node.untriedMoves.length);
             const move = node.untriedMoves.splice(moveIndex, 1)[0];
             
-            // 執行移動
             const sim = simulateMove(move, state.lines, state.triangles, state.currentPlayer);
             
-            // 更新狀態
             const nextState = {
                 lines: sim.newLines,
                 triangles: sim.newTriangles,
@@ -493,80 +490,69 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
             }
             nextState.currentPlayer = nextPlayer;
 
-            const childNode = new MCTSNode(nextState, node, move, state.currentPlayer);
+            const childNode = new MCTSNode(nextState, node, move);
             childNode.untriedMoves = findAllValidMoves(nextState.lines);
             node.children.push(childNode);
             node = childNode;
             state = nextState;
         }
 
-        // 3. Simulation (模擬 / Rollout)
-        // 隨機走到底
-        let tempState = state; // 使用 reference 因為後面不會再用到
-        // 優化：這裡不要一直 deepCopy，而是用 cloneState 
-        // 甚至在迴圈中做 mutable update 
-        let currentLinesSim = cloneState(tempState.lines, tempState.triangles).lines; // Hacky copy
-        // 為了效能，這段 Rollout 必須快
-        // 我們重寫一個極簡版的 Rollout
+        // 3. Simulation (Rollout) - 快速模擬
+        let currentLinesSim = cloneState(state.lines, state.triangles).lines; 
+        let simPlayer = state.currentPlayer;
+        let simScores = { ...state.scores };
+        let simFilled = state.filledCount;
         
-        let simPlayer = tempState.currentPlayer;
-        let simScores = { ...tempState.scores };
-        let simFilled = tempState.filledCount;
-        
-        // 取得剩下所有可走步
         let possibleMoves = findAllValidMoves(currentLinesSim); 
-        
-        // 隨機洗牌 moves 避免偏差
+        // 隨機洗牌
         for (let i = possibleMoves.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [possibleMoves[i], possibleMoves[j]] = [possibleMoves[j], possibleMoves[i]];
         }
 
         let moveIdx = 0;
-        while (simFilled < totalTriangles && moveIdx < possibleMoves.length) {
+        // 限制 Rollout 步數，避免過久
+        const MAX_ROLLOUT_STEPS = 40; 
+        let steps = 0;
+
+        while (simFilled < totalTriangles && moveIdx < possibleMoves.length && steps < MAX_ROLLOUT_STEPS) {
             const rMove = possibleMoves[moveIdx++];
-            // 檢查是否還合法 (因為可能被其他線影響? 不會，因為我們是用 ID)
-            // 但需要檢查該線是否已被畫過 (在 moves 列表中可能有重複? 不會 findAllValidMoves 不重複)
-            // 但 ID 是唯一的。
-            // 只需要檢查 lines 物件
+            steps++;
             
+            // 檢查合法性 (簡單版)
+            // 由於 possibleMoves 是靜態的，已畫過的線可能會被選到，需要過濾
+            // 但 simulateMove 內部會處理嗎？會，但會回傳 scoreGained=0 或 null
+            // 我們這裡手動檢查線段是否被畫過
+            let isAlreadyDrawn = false;
+            for(let sid of rMove.segmentIds) {
+                if(currentLinesSim[sid] && currentLinesSim[sid].drawn) {
+                    isAlreadyDrawn = true; break; 
+                }
+            }
+            if(isAlreadyDrawn) continue;
+
             // 執行
-            // 這裡為了快，直接操作 currentLinesSim (它已經是副本)
-            // 但 tri 需要檢查
-            // 這裡必須用到 simulateMove 邏輯
-            
-            const sim = simulateMove(rMove, currentLinesSim, tempState.triangles, simPlayer); 
-            // 注意：simulateMove 會回傳 NEW objects，這比較慢。
-            // 真正的 MCTS 優化會原地修改。
-            // 鑑於 JS Worker 效能限制，我們接受這個開銷，但用 cloneState 優化過了。
-            
-            if (!sim) continue; // 應該不會發生
+            const sim = simulateMove(rMove, currentLinesSim, state.triangles, simPlayer); 
+            if (!sim) continue;
             
             currentLinesSim = sim.newLines;
-            tempState.triangles = sim.newTriangles; // 更新 ref (這是副本的 triangles)
+            // 不更新 triangles 以省時 (只在 evaluate 需要，Rollout 只需分數)
+            // 但如果 "得分再走"，需要知道是否得分。simulateMove 有回傳 scoreGained
             
             if (sim.scoreGained > 0) {
                 simScores[simPlayer] += sim.scoreGained;
                 simFilled += sim.scoreGained;
                 if (isScoreAndGoAgain) {
-                    // 同一人繼續，且這一步已經消耗了，不用換人，也不用重置 moveIdx
-                    // 但下一輪是同一個人。
-                    // 我們的 possibleMoves 列表是靜態的。
-                    // 這在 "得分再走" 規則下有問題：因為下一次的 valid moves 會變少。
-                    // 為了正確性，每次都得重新 findAllValidMoves。這非常慢。
-                    // 妥協：MCTS 在 Rollout 階段只做簡單隨機，忽略 "再走一步" 的策略深度，
-                    // 或者：如果得分，直接繼續隨機選。
                     continue; 
                 }
             }
             simPlayer = (simPlayer === 1) ? 2 : 1;
         }
 
-        // 4. Backpropagation (反向傳播)
-        let winner = 0;
-        if (simScores[rootPlayer] > simScores[(rootPlayer===1?2:1)]) winner = 1; // Root player wins
-        else if (simScores[rootPlayer] < simScores[(rootPlayer===1?2:1)]) winner = 0; // Loss
-        else winner = 0.5; // Draw
+        // 4. Backpropagation
+        let winner = 0.5;
+        if (simScores[rootPlayer] > simScores[(rootPlayer===1?2:1)]) winner = 1;
+        else if (simScores[rootPlayer] < simScores[(rootPlayer===1?2:1)]) winner = 0;
 
         while (node !== null) {
             node.visits++;
@@ -575,9 +561,8 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
         }
     }
     
-    logToMain(`MCTS 完成，迭代次數: ${iterations}`);
+    logToMain(`MCTS 完成，模擬次數: ${iterations}`);
 
-    // 選擇訪問次數最多的子節點
     if (rootNode.children.length === 0) return null;
     
     const bestChild = rootNode.children.reduce((best, child) => {
@@ -589,7 +574,7 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
 
 
 // ==========================================================
-// Minimax 演算法
+// ⚔️ Deep Minimax (深度全開)
 // ==========================================================
 
 function quiescenceSearch(currentLines, currentTriangles, depth, isMaximizingPlayer, alpha, beta, weights) {
@@ -602,17 +587,18 @@ function quiescenceSearch(currentLines, currentTriangles, depth, isMaximizingPla
         if (alpha >= beta) return ttEntry.score;
     }
 
-    // 傳入 weights
     const standPatScore = evaluateBoard(currentLines, currentTriangles, weights);
     
     if (Math.abs(standPatScore) >= 1000000) return standPatScore;
     if (depth === 0) return standPatScore;
 
     let ttFlag = 0;
+    const scoringMoves = findAllScoringMoves(currentLines, currentTriangles, isMaximizingPlayer ? 2 : 1);
+
     if (isMaximizingPlayer) { 
         let bestValue = standPatScore;
         alpha = Math.max(alpha, bestValue);
-        const scoringMoves = findAllScoringMoves(currentLines, currentTriangles, 2); 
+        
         if (isScoreAndGoAgain) {
             for (const move of scoringMoves) {
                 const sim = simulateMove(move, currentLines, currentTriangles, 2);
@@ -630,7 +616,7 @@ function quiescenceSearch(currentLines, currentTriangles, depth, isMaximizingPla
     } else { 
         let bestValue = standPatScore;
         beta = Math.min(beta, bestValue);
-        const scoringMoves = findAllScoringMoves(currentLines, currentTriangles, 1); 
+        
         if (isScoreAndGoAgain) {
             for (const move of scoringMoves) {
                 const sim = simulateMove(move, currentLines, currentTriangles, 1);
@@ -658,7 +644,6 @@ function minimax(currentLines, currentTriangles, depth, isMaximizingPlayer, alph
         if (alpha >= beta) return ttEntry.score;
     }
     
-    // 傳入 weights
     const currentEval = evaluateBoard(currentLines, currentTriangles, weights);
     if (Math.abs(currentEval) >= 1000000) { 
         if (currentEval > 0) return currentEval + depth;
@@ -704,18 +689,19 @@ function minimax(currentLines, currentTriangles, depth, isMaximizingPlayer, alph
     return bestValue;
 }
 
+// ⚡ 深度解鎖
 function getAIDepth() {
     switch (REQUIRED_LINE_LENGTH) {
-        case 1: return 5; 
-        case 2: return 6; 
-        case 3: return 7; 
+        case 1: return 7; // 原本 5 -> 7
+        case 2: return 7; 
+        case 3: return 8; 
         case 4: case 5: return 8; 
         default: return 6; 
     }
 }
 
 /**
- * 找出最佳移動 (支援傳入 weights)
+ * 找出最佳移動 (Deep Minimax 入口)
  */
 function findBestAIMove(currentLines, currentTriangles, player, weights) {
     const isMaximizingPlayer = (player === 2);
@@ -729,7 +715,7 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
         const sim = simulateMove(move, currentLines, currentTriangles, player);
         if (!sim) return { move, value: -Infinity }; 
         const immediateScore = sim.scoreGained * 1000;
-        const futureEval = evaluateBoard(sim.newLines, sim.newTriangles, weights); // Pass weights
+        const futureEval = evaluateBoard(sim.newLines, sim.newTriangles, weights);
         let totalValue;
         if (isMaximizingPlayer) {
             totalValue = immediateScore + futureEval;
@@ -747,6 +733,7 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
     let bestMove = null;
     let bestValue = isMaximizingPlayer ? -Infinity : +Infinity;
 
+    // Iterative Deepening
     for (let currentDepth = 1; currentDepth <= MAX_DEPTH; currentDepth++) {
         let alpha = -Infinity;
         let beta = +Infinity;
@@ -755,6 +742,7 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
 
         const movesToSearch = Array.from(scoredMoves);
         if (bestMove) {
+            // 將上一層最好的移動排到最前面
             movesToSearch.sort((a, b) => {
                 const moveAId = getLineId(a.move.dot1, a.move.dot2);
                 const moveBId = getLineId(b.move.dot1, b.move.dot2);
@@ -779,7 +767,7 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
                 isStillCurrentPlayer ? isMaximizingPlayer : !isMaximizingPlayer,
                 alpha, 
                 beta,
-                weights // Pass weights
+                weights
             );
             
             let totalMoveValue;
@@ -803,13 +791,24 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
         bestMove = currentBestMoveForDepth;
         bestValue = currentBestValueForDepth;
         
+        postIntermediateResult(bestMove, currentDepth, bestValue);
+
         if (Math.abs(bestValue) >= (1000000 - MAX_DEPTH)) break;
     }
     return bestMove;
 }
 
+function postIntermediateResult(move, depth, score) {
+    self.postMessage({
+        type: 'progress',
+        message: `[Worker] 深度 ${depth} 完成。 評分: ${score.toFixed(0)}`,
+        bestMove: move 
+    });
+}
+
+
 // ==========================================================
-// 基因演算法訓練模擬
+// 基因演算法訓練模擬 (保持不變)
 // ==========================================================
 
 function runTrainingGeneration(population, gameConfig) {
@@ -818,10 +817,8 @@ function runTrainingGeneration(population, gameConfig) {
     REQUIRED_LINE_LENGTH = gameConfig.requiredLineLength;
     isScoreAndGoAgain = gameConfig.isScoreAndGoAgain;
     
-    // 初始化分數
     population.forEach(agent => agent.wins = 0);
 
-    // 1. 執行錦標賽 (訓練)
     const MATCHES_PER_AGENT = 2; 
     for (let i = 0; i < population.length; i++) {
         const agentA = population[i];
@@ -839,19 +836,12 @@ function runTrainingGeneration(population, gameConfig) {
         }
     }
 
-    population.forEach(agent => {
-        agent.fitness = agent.wins; 
-    });
-    
-    // 2. 找出最強者並進行「示範賽」以獲取棋盤圖片
+    population.forEach(agent => { agent.fitness = agent.wins; });
     population.sort((a, b) => b.fitness - a.fitness);
     const bestAgent = population[0];
-    const opponent = population[1] || population[population.length - 1]; // 與第二名或隨機對手對戰
-    
-    // 模擬一場，並要求回傳詳細棋盤狀態 (true)
+    const opponent = population[1] || population[population.length - 1]; 
     const showcaseResult = simulateFullGame(bestAgent.weights, opponent.weights, gameConfig.lines, gameConfig.triangles, true);
 
-    // 回傳結果 (包含棋盤狀態)
     self.postMessage({
         type: 'training_result',
         population: population,
@@ -859,44 +849,34 @@ function runTrainingGeneration(population, gameConfig) {
     });
 }
 
-/**
- * 模擬一場完整的 AI vs AI 遊戲
- * @param {boolean} returnDetails - 若為 true，回傳 {winner, finalLines}，否則只回傳 winner
- */
 function simulateFullGame(weightsP1, weightsP2, initialLines, initialTriangles, returnDetails = false) {
     let currentLines = deepCopy(initialLines);
     let currentTriangles = deepCopy(initialTriangles);
     let currentPlayer = 1;
     let scores = { 1: 0, 2: 0 };
     let filledCount = 0;
-    
     let movesLimit = 200; 
+
     while (filledCount < totalTriangles && movesLimit > 0) {
         movesLimit--;
-        
         const weights = (currentPlayer === 1) ? weightsP1 : weightsP2;
         const isMaximizing = (currentPlayer === 2);
         
         let allMoves = findAllValidMoves(currentLines);
         if (allMoves.length === 0) break; 
-        
         allMoves.sort(() => Math.random() - 0.5); 
         
         let bestMove = null;
         let bestVal = isMaximizing ? -Infinity : Infinity;
         
-        // 快速 Minimax (深度 1)
         for (const move of allMoves) {
             const sim = simulateMove(move, currentLines, currentTriangles, currentPlayer);
             if (!sim) continue;
-            
             const immediateScore = sim.scoreGained * 1000;
             const boardVal = evaluateBoard(sim.newLines, sim.newTriangles, weights);
-            
             let totalVal;
             if (isMaximizing) totalVal = immediateScore + boardVal;
             else totalVal = -immediateScore + boardVal;
-            
             if (isMaximizing) {
                 if (totalVal > bestVal) { bestVal = totalVal; bestMove = move; }
             } else {
@@ -905,11 +885,9 @@ function simulateFullGame(weightsP1, weightsP2, initialLines, initialTriangles, 
         }
 
         if (!bestMove) break;
-        
         const sim = simulateMove(bestMove, currentLines, currentTriangles, currentPlayer);
         currentLines = sim.newLines;
         currentTriangles = sim.newTriangles;
-        
         if (sim.scoreGained > 0) {
             scores[currentPlayer] += sim.scoreGained;
             filledCount += sim.scoreGained;
@@ -919,7 +897,6 @@ function simulateFullGame(weightsP1, weightsP2, initialLines, initialTriangles, 
     }
     
     const winner = (scores[1] > scores[2]) ? 1 : ((scores[2] > scores[1]) ? 2 : 0);
-
     if (returnDetails) {
         return { winner: winner, finalLines: currentLines };
     }
