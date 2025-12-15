@@ -17,6 +17,7 @@ let REQUIRED_LINE_LENGTH = 1;
 
 // 遊戲規則
 let isScoreAndGoAgain = false; 
+let isAllowShorterLines = false; // [修改] 新增變數：允許短連線
 const QUIESCENCE_MAX_DEPTH = 3;
 
 // 自訂權重 (用於 Trained 模式)
@@ -47,6 +48,7 @@ self.onmessage = (e) => {
         totalTriangles = data.gameState.totalTriangles;
         REQUIRED_LINE_LENGTH = data.gameState.requiredLineLength;
         isScoreAndGoAgain = data.gameState.isScoreAndGoAgain; 
+        isAllowShorterLines = data.gameState.allowShorterLines; // [修改] 接收參數
         
         if (aiType === 'trained' && data.weights) {
             customWeights = data.weights;
@@ -130,6 +132,8 @@ function findIntermediateDots(dotA, dotB) {
     });
     return intermediateDots;
 }
+
+// [修改] 更新驗證邏輯以支援短連線
 function isValidPreviewLine(dotA, dotB, currentLines) {
     if (!dotA || !dotB) return false;
     const dy = dotB.y - dotA.y;
@@ -145,8 +149,18 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
     for (let i = 0; i < allDotsOnLine.length - 1; i++) {
         segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
     }
+    
+    // [修改] 判斷長度邏輯
     if (segmentIds.length === 0 && dotA !== dotB) return false;
-    if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+    
+    if (isAllowShorterLines) {
+        // 如果允許短連線，只要大於等於 1 且 不超過設定長度 即可
+        if (segmentIds.length < 1 || segmentIds.length > REQUIRED_LINE_LENGTH) return false;
+    } else {
+        // 原有邏輯：必須嚴格等於
+        if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+    }
+
     let allSegmentsExist = true;
     let hasUndrawnSegment = false; 
     for (const id of segmentIds) {
@@ -816,6 +830,7 @@ function runTrainingGeneration(population, gameConfig) {
     totalTriangles = gameConfig.totalTriangles;
     REQUIRED_LINE_LENGTH = gameConfig.requiredLineLength;
     isScoreAndGoAgain = gameConfig.isScoreAndGoAgain;
+    isAllowShorterLines = gameConfig.allowShorterLines; // [修正] 這裡也需要更新
     
     population.forEach(agent => agent.wins = 0);
 
