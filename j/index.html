@@ -151,15 +151,15 @@
                     <input type="text" id="colab-url-input" class="control-select server-input" placeholder="貼上 ngrok 網址 (https://...)" disabled>
                     <div class="server-hint" id="server-status-hint">勾選上方選項以啟用雲端運算</div>
                 </div>
-                <div class="control-group">
-                    <label for="board-size-select" class="control-label">棋盤大小</label>
-                    <select id="board-size-select" class="control-select">
-                        <option value="tiny">最小 (訓練推薦)</option>
-                        <option value="small">小</option>
-                        <option value="medium" selected>中</option>
-                        <option value="large">大</option>
-                    </select>
-                </div>
+<div class="control-group">
+    <label for="board-size-select" class="control-label">棋盤大小</label>
+    <select id="board-size-select" class="control-select">
+        <option value="tiny">迷你 (2-3-2)</option>
+        
+        <option value="small_343">小型 (3-4-3)</option>
+        <option value="medium_454">中型 (4-5-4)</option>
+        <option value="large_565">大型 (5-6-5)</option> <option value="small">標準六邊形 (小)</option> <option value="medium" selected>標準六邊形 (中)</option> <option value="large">標準六邊形 (大)</option> </select>
+</div>
                 <div class="control-group">
                     <label for="line-length-select" class="control-label">連線格數</label>
                     <select id="line-length-select" class="control-select">
