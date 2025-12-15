@@ -43,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchStatusMessage = document.getElementById('batch-status-message');
     
     const scoreAndGoCheckbox = document.getElementById('score-and-go-checkbox');
+    // **** (新功能) 允許小於設定長度的 Checkbox ****
+    const allowSmallerLengthsCheckbox = document.getElementById('allow-smaller-lengths-checkbox');
 
     const inputModeSelect = document.getElementById('input-mode-select');
     
@@ -60,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resetButton, exportLogButton, exportPNGButton, 
         boardSizeInput, lineLengthSelect, 
         startBatchButton, batchCountInput,
-        scoreAndGoCheckbox,
+        scoreAndGoCheckbox, allowSmallerLengthsCheckbox, // 加入新 Checkbox
         inputModeSelect,
         // **** (新功能) 加入新的控制器 ****
         p1ControllerSelect, p2ControllerSelect,
@@ -115,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let REQUIRED_LINE_LENGTH = 1; 
     
     let isScoreAndGoAgain = false;
+    let isAllowSmallerLengths = false; // **** (新功能) ****
     
     let inputMode = 'drag'; 
 
@@ -237,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        isAllowSmallerLengths = allowSmallerLengthsCheckbox.checked; // **** (新功能) ****
         
         inputMode = inputModeSelect.value;
         
@@ -279,6 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
                 isScoreAndGoAgain: isScoreAndGoAgain, 
+                isAllowSmallerLengths: isAllowSmallerLengths, // **** (新功能) ****
                 inputMode: inputMode, 
                 dateTime: new Date().toISOString()
             },
@@ -939,7 +944,16 @@ document.addEventListener('DOMContentLoaded', () => {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
         if (segmentIds.length === 0 && dotA !== dotB) return false;
-        if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        
+        // **** (修改) 長度判斷邏輯 ****
+        if (isAllowSmallerLengths) {
+            // 如果啟用，允許 1 ~ N
+            if (segmentIds.length < 1 || segmentIds.length > REQUIRED_LINE_LENGTH) return false; 
+        } else {
+            // 預設行為：必須完全等於 N
+            if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        }
+
         let allSegmentsExist = true;
         let hasUndrawnSegment = false; 
         for (const id of segmentIds) {
@@ -1215,7 +1229,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 player: currentPlayer,
                 totalTriangles: totalTriangles,
                 requiredLineLength: REQUIRED_LINE_LENGTH,
-                isScoreAndGoAgain: isScoreAndGoAgain 
+                isScoreAndGoAgain: isScoreAndGoAgain,
+                isAllowSmallerLengths: isAllowSmallerLengths // **** (新功能) ****
             }
         });
     }
@@ -1505,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 csvContent += `# 玩家 2 控制器: ${escapeCSV(gameLog.settings.player2Controller)}\n`;
                 csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`;
                 csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
+                csvContent += `# 允許 1~N 格連線: ${gameLog.settings.isAllowSmallerLengths}\n`; // New
                 csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
 
                 csvContent += headers.join(",") + "\n";
@@ -1580,6 +1596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         csvContent += `# 玩家 2 控制器: ${escapeCSV(gameHistoryLog.settings.player2Controller)}\n`;
         csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`;
         csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
+        csvContent += `# 允許 1~N 格連線: ${gameHistoryLog.settings.isAllowSmallerLengths}\n`; // New
         csvContent += `# 紀錄時間: ${gameHistoryLog.settings.dateTime}\n\n`;
 
         csvContent += headers.join(",") + "\n";
@@ -1772,6 +1789,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startPlayerSelect) startPlayerSelect.addEventListener('change', initGame);
     
     if (scoreAndGoCheckbox) scoreAndGoCheckbox.addEventListener('change', initGame);
+    if (allowSmallerLengthsCheckbox) allowSmallerLengthsCheckbox.addEventListener('change', initGame); // New
+
     
     if (inputModeSelect) inputModeSelect.addEventListener('change', initGame);
     
