@@ -63,13 +63,13 @@
                     <input type="number" id="board-size-input" class="control-select" value="4" min="2" max="10">
                 </div>
                 <div class="control-group">
-                    <label for="line-length-select" class="control-label">連線格數</label>
+                    <label for="line-length-select" class="control-label">連線格數 (N)</label>
                     <select id="line-length-select" class="control-select">
                         <option value="1" selected>1 格</option> <option value="2">2 格</option>
                         <option value="3">3 格</option> <option value="4">4 格</option>
                         <option value="5">5 格</option>
                     </select>
-                    </div>
+                </div>
 
                 <div class="control-group">
                     <label for="p1-controller-select" class="control-label">玩家 1 控制器</label>
@@ -109,6 +109,10 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="score-and-go-checkbox">
                         <label for="score-and-go-checkbox">得分後再走一步</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="allow-smaller-lengths-checkbox">
+                        <label for="allow-smaller-lengths-checkbox">允許 1 ~ N 格連線</label>
                     </div>
                 </div>
                 
