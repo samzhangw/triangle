@@ -27,6 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiThinkingMessage = document.getElementById('ai-thinking-message'); 
     const gameModeSelect = document.getElementById('game-mode-select');
     const boardSizeSelect = document.getElementById('board-size-select');
+    
+    // **** 自訂棋盤元素 ****
+    const customBoardInputGroup = document.getElementById('custom-board-input-group');
+    const customBoardPatternInput = document.getElementById('custom-board-pattern');
+
     const lineLengthSelect = document.getElementById('line-length-select');
     const aiLogContainer = document.getElementById('ai-log-container');
     const aiLogOutput = document.getElementById('ai-log-output');
@@ -46,6 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchStatusMessage = document.getElementById('batch-status-message');
     
     const scoreAndGoCheckbox = document.getElementById('score-and-go-checkbox');
+    // **** 新增規則：允許短線段 ****
+    const allowShorterLinesCheckbox = document.getElementById('allow-shorter-lines-checkbox');
 
     const inputModeSelect = document.getElementById('input-mode-select');
     
@@ -89,12 +96,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let playControls = [
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
         startBatchButton, batchCountInput,
-        scoreAndGoCheckbox,
+        scoreAndGoCheckbox, allowShorterLinesCheckbox,
         inputModeSelect,
         aiP1TypeSelect, aiP2TypeSelect,
         startPlayerSelect,
-        // 加入 Colab 相關
-        colabUrlInput, useCloudCheckbox
+        colabUrlInput, useCloudCheckbox,
+        customBoardPatternInput
     ];
     
     // uiControls 用於 AI 思考或批次時 *全部* 禁用
@@ -131,31 +138,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; 
     const ANGLE_TOLERANCE = 1.5; 
 
-// 在 m/script.js 中找到 computeRowLengths 函式
-function computeRowLengths(size) {
-    switch (size) {
-        // --- 原有的與新稱呼 ---
-        case 'tiny':
-            return [2, 3, 2];
-
-        // --- 新增的佈局 (2-3-2, 3-4-3, 4-5-4 等等) ---
-        case 'small_343':
-            return [3, 4, 3];
-        case 'medium_454':
-            return [4, 5, 4];
-        case 'large_565':
-            return [5, 6, 5];
-        
-        // --- 原有的標準六邊形佈局 ---
-        case 'small':
-            return [3, 4, 5, 4, 3];
-        case 'large':
-            return [5, 6, 7, 8, 9, 8, 7, 6, 5];
-        case 'medium':
-        default:
-            return [4, 5, 6, 7, 6, 5, 4];
+    // 依棋盤大小產生 ROW_LENGTHS
+    function computeRowLengths(size) {
+        switch (size) {
+            case 'tiny':
+                return [2, 3, 2];
+            case 'small_343':
+                return [3, 4, 3];
+            case 'medium_454':
+                return [4, 5, 4];
+            case 'large_565':
+                return [5, 6, 5];
+            case 'small':
+                return [3, 4, 5, 4, 3];
+            case 'large':
+                return [5, 6, 7, 8, 9, 8, 7, 6, 5];
+            case 'medium':
+            default:
+                return [4, 5, 6, 7, 6, 5, 4];
+        }
     }
-}
 
     // 玩家顏色
     const PLAYER_COLORS = {
@@ -178,6 +180,7 @@ function computeRowLengths(size) {
     let REQUIRED_LINE_LENGTH = 1; 
     
     let isScoreAndGoAgain = false;
+    let isAllowShorterLines = false;
     
     let inputMode = 'drag'; 
     
@@ -207,7 +210,7 @@ function computeRowLengths(size) {
     let trainingPopulation = [];
     let currentGeneration = 0;
     let maxGenerations = 50;
-    let bestWeightsSoFar = null; // 用來儲存訓練出的最佳權重
+    let bestWeightsSoFar = null; 
 
     // ===================================
     // Web Worker 相關
@@ -323,6 +326,7 @@ function computeRowLengths(size) {
         }
         
         isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        isAllowShorterLines = allowShorterLinesCheckbox ? allowShorterLinesCheckbox.checked : false;
         
         inputMode = inputModeSelect.value;
         
@@ -339,6 +343,7 @@ function computeRowLengths(size) {
                 aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
                 aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
                 isScoreAndGoAgain: isScoreAndGoAgain, 
+                allowShorterLines: isAllowShorterLines,
                 inputMode: inputMode, 
                 dateTime: new Date().toISOString()
             },
@@ -348,8 +353,20 @@ function computeRowLengths(size) {
 
         gameMode = isBatchRunning ? 2 : parseInt(gameModeSelect.value, 10);
         
+        // **** 支援自訂棋盤 ****
         const sizeValue = (boardSizeSelect && boardSizeSelect.value) ? boardSizeSelect.value : 'medium';
-        ROW_LENGTHS = computeRowLengths(sizeValue);
+        if (sizeValue === 'custom') {
+            const patternStr = customBoardPatternInput.value || "3,4,3";
+            try {
+                ROW_LENGTHS = patternStr.split(/[,，\s]+/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+                if (ROW_LENGTHS.length === 0) ROW_LENGTHS = [3, 4, 3];
+            } catch (e) {
+                console.error("解析自訂棋盤失敗", e);
+                ROW_LENGTHS = [3, 4, 3];
+            }
+        } else {
+            ROW_LENGTHS = computeRowLengths(sizeValue);
+        }
         
         const lengthValue = (lineLengthSelect && lineLengthSelect.value) ? lineLengthSelect.value : '1';
         REQUIRED_LINE_LENGTH = parseInt(lengthValue, 10);
@@ -381,22 +398,17 @@ function computeRowLengths(size) {
         clearAILog();
 
 
-        // **** 修改開始：計算 1-2-3 著色偏移量 ****
+        // **** 計算 1-2-3 著色偏移量 ****
         dots = [];
         const rowOffsets = new Array(ROW_LENGTHS.length).fill(0);
         const midRow = Math.floor(ROW_LENGTHS.length / 2);
         const midCol = Math.floor(ROW_LENGTHS[midRow] / 2);
         
-        // 設定中心點為 3 (在公式 (offset + c) % 3 + 1 中，對應 value 2)
-        // (offset + midCol) % 3 = 2  =>  offset = (2 - midCol % 3 + 3) % 3
         rowOffsets[midRow] = (2 - (midCol % 3) + 3) % 3;
 
-        // 向上推導
         for (let r = midRow - 1; r >= 0; r--) {
             const lenCurr = ROW_LENGTHS[r];
             const lenNext = ROW_LENGTHS[r+1];
-            // 若下一行變長 (Expanding): offset[curr] = offset[next] - 1
-            // 若下一行變短/不變 (Shrinking): offset[curr] = offset[next] - 2 (即 +1 mod 3)
             if (lenNext > lenCurr) {
                 rowOffsets[r] = (rowOffsets[r+1] - 1 + 3) % 3;
             } else {
@@ -404,12 +416,9 @@ function computeRowLengths(size) {
             }
         }
 
-        // 向下推導
         for (let r = midRow; r < ROW_LENGTHS.length - 1; r++) {
             const lenCurr = ROW_LENGTHS[r];
             const lenNext = ROW_LENGTHS[r+1];
-            // 若下一行變長 (Expanding): offset[next] = offset[curr] + 1
-            // 若下一行變短/不變 (Shrinking): offset[next] = offset[curr] + 2 (即 -1 mod 3)
             if (lenNext > lenCurr) {
                 rowOffsets[r+1] = (rowOffsets[r] + 1) % 3;
             } else {
@@ -427,11 +436,10 @@ function computeRowLengths(size) {
                     y: r * DOT_SPACING_Y + PADDING,
                     r: r, c: c,
                     id: `${r},${c}`, 
-                    number: (rowOffsets[r] + c) % 3 + 1 // 應用著色公式
+                    number: (rowOffsets[r] + c) % 3 + 1 
                 };
             }
         });
-        // **** 修改結束 ****
 
         // 產生所有 "相鄰" 線段
         lines = {};
@@ -469,7 +477,6 @@ function computeRowLengths(size) {
             }
         }
         
-        // 建立固定的 Line ID 列表
         sortedLineIds = Object.keys(lines).sort();
 
         // 產生所有三角形
@@ -674,32 +681,25 @@ function computeRowLengths(size) {
 
     // 「點擊」模式的邏輯
     function handleCanvasClick(e) {
-        
         if (isSetupMode) {
             handleSetupDotClick(e);
             return;
         }
-
         if (isBatchRunning || isAIThinking) return;
-        
         const isP1AI = (gameMode === 2);
         const isP2AI = (gameMode === 1 || gameMode === 2);
         if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
             return;
         }
-
         if (actionBar && actionBar.classList.contains('visible')) {
             return;
         }
-
         const pos = getMousePos(e);
         const clickedDot = findNearestDot(pos.x, pos.y);
-        
         if (!clickedDot) {
             if (selectedDot1) cancelLine(); 
             return;
         }
-
         if (selectedDot1 === null) {
             selectedDot1 = clickedDot;
         } 
@@ -722,19 +722,15 @@ function computeRowLengths(size) {
     // 滑鼠/觸控按下 (拖曳模式)
     function handleDragStart(e) {
         if (isSetupMode) return; 
-
         if (isBatchRunning || isAIThinking) return;
-        
         const isP1AI = (gameMode === 2);
         const isP2AI = (gameMode === 1 || gameMode === 2);
         if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
             return;
         }
-        
         e.preventDefault();
         const pos = getMousePos(e);
         const clickedDot = findNearestDot(pos.x, pos.y);
-
         if (clickedDot) {
             isDrawing = true;
             selectedDot1 = clickedDot;
@@ -746,17 +742,14 @@ function computeRowLengths(size) {
     // 滑鼠/觸控移動 (拖曳模式)
     function handleDragMove(e) {
         if (!isDrawing) return;
-        
         e.preventDefault();
         const pos = getMousePos(e);
         const hoverDot = findNearestDot(pos.x, pos.y);
-
         if (hoverDot && hoverDot !== selectedDot1) {
             selectedDot2 = hoverDot;
         } else {
             selectedDot2 = null;
         }
-        
         drawCanvas();
     }
 
@@ -764,7 +757,6 @@ function computeRowLengths(size) {
     function handleDragEnd(e) {
         if (!isDrawing) return;
         isDrawing = false;
-        
         if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
             confirmLine();
         } else {
@@ -794,39 +786,25 @@ function computeRowLengths(size) {
 
     function toggleSetupMode() {
         isSetupMode = !isSetupMode;
-        
         if (isSetupMode) {
-            // --- 進入佈局模式 ---
-            
             initGame(); 
             isSetupMode = true; 
-            
             setupModeButton.textContent = '完成佈局並開始';
             setupModeButton.classList.remove('primary');
             setupModeButton.classList.add('success');
-            
             togglePlayControls(false); 
-            
             setupActionBar.classList.remove('hidden');
             actionBar.classList.remove('visible'); 
-            
             cancelLine();
             removeCanvasListeners();
             bindClickListeners(); 
-
         } else {
-            // --- 退出佈局模式 (開始遊戲) ---
-            
             setupModeButton.textContent = '進入佈局模式';
             setupModeButton.classList.remove('success');
             setupModeButton.classList.add('primary');
-            
             togglePlayControls(true); 
-            
             setupActionBar.classList.add('hidden');
-            
             cancelSetupLine();
-            
             startGameFromLayout(); 
         }
     }
@@ -834,12 +812,10 @@ function computeRowLengths(size) {
     function handleSetupDotClick(e) {
         const pos = getMousePos(e);
         const clickedDot = findNearestDot(pos.x, pos.y);
-        
         if (!clickedDot) {
             cancelSetupLine();
             return;
         }
-
         if (selectedDot1 === null) {
             selectedDot1 = clickedDot;
         } 
@@ -859,26 +835,21 @@ function computeRowLengths(size) {
     
     function isValidSetupLine(dotA, dotB) {
         if (!dotA || !dotB) return false;
-        
         const allDotsOnLine = findIntermediateDots(dotA, dotB);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
-        
         if (segmentIds.length === 0) return false; 
-        
         return segmentIds.every(id => !!lines[id]);
     }
     
     function applySetupLine(player) {
         if (!selectedDot1 || !selectedDot2) return;
-        
         if (!isValidSetupLine(selectedDot1, selectedDot2)) {
              cancelSetupLine();
              return;
         }
-        
         const allDotsOnLine = findIntermediateDots(selectedDot1, selectedDot2);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
@@ -900,7 +871,6 @@ function computeRowLengths(size) {
                 lines[id].sharedBy = 0;
             }
         }
-        
         cancelSetupLine(); 
         drawCanvas(); 
     }
@@ -912,7 +882,6 @@ function computeRowLengths(size) {
     }
 
     function startGameFromLayout() {
-        // 1. 重新綁定正常的遊戲監聽器
         removeCanvasListeners();
         if (inputModeSelect.value === 'drag') {
             bindDragListeners();
@@ -920,13 +889,11 @@ function computeRowLengths(size) {
             bindClickListeners();
         }
 
-        // 2. 根據佈局的線段，重新計算分數和三角形
         scores = { 1: 0, 2: 0 };
         let totalFilledThisGame = 0;
         
         triangles.forEach(tri => {
             const isComplete = tri.lineKeys.every(key => lines[key] && lines[key].drawn);
-            
             if (isComplete) {
                 let p1Lines = 0;
                 let p2Lines = 0;
@@ -956,6 +923,7 @@ function computeRowLengths(size) {
         
         gameMode = parseInt(gameModeSelect.value, 10);
         isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        isAllowShorterLines = allowShorterLinesCheckbox.checked;
         inputMode = inputModeSelect.value;
         currentPlayer = parseInt(startPlayerSelect.value, 10);
         
@@ -970,6 +938,7 @@ function computeRowLengths(size) {
                 aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
                 aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
                 isScoreAndGoAgain: isScoreAndGoAgain, 
+                allowShorterLines: isAllowShorterLines,
                 inputMode: inputMode, 
                 dateTime: new Date().toISOString(),
                 startedFromLayout: true
@@ -992,7 +961,6 @@ function computeRowLengths(size) {
             summary: {}
         };
         
-        // 5. 更新 UI
         updateAITypeVisibility();
         updateUI();
         drawCanvas();
@@ -1029,12 +997,10 @@ function computeRowLengths(size) {
     // "確認連線"
     function confirmLine() {
         if (!selectedDot1 || !selectedDot2) return;
-        
         if (!isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
             cancelLine(); 
             return;
         }
-        
         const moveResult = applyMoveToBoard(selectedDot1, selectedDot2, currentPlayer);
 
         if (!moveResult.newSegmentDrawn) {
@@ -1082,11 +1048,9 @@ function computeRowLengths(size) {
     function cancelLine() {
         selectedDot1 = null;
         selectedDot2 = null;
-        
         if (inputMode === 'click' && actionBar) {
             actionBar.classList.remove('visible');
         }
-        
         drawCanvas();
     }
 
@@ -1150,8 +1114,15 @@ function computeRowLengths(size) {
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
+        
+        // **** 修改：長度判斷 ****
         if (segmentIds.length === 0 && dotA !== dotB) return false;
-        if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        if (isAllowShorterLines) {
+            if (segmentIds.length < 1 || segmentIds.length > REQUIRED_LINE_LENGTH) return false;
+        } else {
+            if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        }
+
         let allSegmentsExist = true;
         let hasUndrawnSegment = false; 
         for (const id of segmentIds) {
@@ -1206,7 +1177,6 @@ function computeRowLengths(size) {
             triggerAIMove();
         } else {
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
-            
             const allMoves = findAllValidMoves(lines);
             if (allMoves.length === 0) {
                 const playerName = (currentPlayer === 1) ? "玩家 1" : "玩家 2";
@@ -1222,21 +1192,16 @@ function computeRowLengths(size) {
     function updateUI() {
         score1El.textContent = scores[1];
         score2El.textContent = scores[2];
-        
         let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
         let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
-        
         if (gameMode === 1) { 
             player2Name = `電腦 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
         } else if (gameMode === 2) { 
             player1Name = `電腦 1 (${aiP1TypeSelect.options[aiP1TypeSelect.selectedIndex].text})`;
             player2Name = `電腦 2 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
         }
-
         player1ScoreBox.childNodes[0].nodeValue = `${player1Name}: `;
         player2ScoreBox.childNodes[0].nodeValue = `${player2Name}: `;
-
-
         if (currentPlayer === 1) {
             player1ScoreBox.classList.add('active');
             player2ScoreBox.classList.remove('active', 'player2');
@@ -1259,11 +1224,9 @@ function computeRowLengths(size) {
             if (aiWorker) aiWorker.terminate();
             isAIThinking = false;
         }
-        
         let player1Name = player1ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let player2Name = player2ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let winnerMessage = "";
-
         if (scores[1] > scores[2]) {
             winnerMessage = `${player1Name} 獲勝！`;
         } else if (scores[2] > scores[1]) {
@@ -1271,25 +1234,18 @@ function computeRowLengths(size) {
         } else {
             winnerMessage = "平手！";
         }
-        
-        // 紀錄遊戲總結
         gameHistoryLog.summary = {
             finalScoreP1: scores[1],
             finalScoreP2: scores[2],
             winnerMessage: winnerMessage
         };
-
         if (isBatchRunning) {
-            
             exportCanvasAsPNG(batchGamesCompleted + 1, null); 
-            
             batchLog.push(gameHistoryLog); 
             batchGamesCompleted++;
-            
             if (batchStatusMessage) {
                 batchStatusMessage.textContent = `執行中... (已完成 ${batchGamesCompleted} / ${batchTotalGames} 場)`;
             }
-            
             if (batchGamesCompleted < batchTotalGames) {
                 setTimeout(initGame, 10); 
             } else {
@@ -1302,10 +1258,8 @@ function computeRowLengths(size) {
                 }
                 exportBatchLog(); 
             }
-
         } else {
             if (pngStepLog.length > 0) {
-                // (**** 新功能) 如果是從佈局開始，給 ZIP 一個特殊檔名 ****
                 let zipFilename = null;
                 if (gameHistoryLog.settings.startedFromLayout) {
                     const date = new Date(gameHistoryLog.settings.dateTime);
@@ -1314,20 +1268,16 @@ function computeRowLengths(size) {
                 }
                 createAndDownloadZip(zipFilename);
             }
-            
             if (winnerText) {
                 winnerText.textContent = winnerMessage;
             } else {
                 console.error("找不到 'winner-text' 元素！");
             }
-            
             if (finalScoreText) {
                 finalScoreText.textContent = `比分: ${scores[1]} V.S. ${scores[2]}`;
             }
-            
             modalOverlay.classList.remove('hidden'); 
             if (actionBar) actionBar.classList.remove('visible'); 
-
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
             if (aiLogContainer) aiLogContainer.classList.add('hidden');
         }
@@ -1365,7 +1315,6 @@ function computeRowLengths(size) {
             aiType = aiP2TypeSelect.value;
         }
         
-        // **** 傳入最佳權重 (如果選擇了 Trained 類型) ****
         let weightsToSend = null;
         if (aiType === 'trained' && bestWeightsSoFar) {
             weightsToSend = bestWeightsSoFar;
@@ -1382,16 +1331,15 @@ function computeRowLengths(size) {
                 player: currentPlayer,
                 totalTriangles: totalTriangles,
                 requiredLineLength: REQUIRED_LINE_LENGTH,
-                isScoreAndGoAgain: isScoreAndGoAgain 
+                isScoreAndGoAgain: isScoreAndGoAgain,
+                allowShorterLines: isAllowShorterLines // **** 傳送規則 ****
             }
         };
 
-        // **** 判斷是否使用雲端運算 (包含勾選框檢查) ****
         const isCloudEnabled = useCloudCheckbox && useCloudCheckbox.checked;
         const colabUrl = colabUrlInput ? colabUrlInput.value.trim() : "";
 
         if (isCloudEnabled) {
-            // **強制雲端邏輯**
             if (!colabUrl || !colabUrl.startsWith("http")) {
                 alert("❌ 錯誤：您已啟用雲端運算，但尚未輸入有效的 Ngrok 網址。\n請輸入網址或取消勾選以使用本機運算。");
                 logAI("--- [中斷] 未輸入有效的雲端網址 ---");
@@ -1418,44 +1366,36 @@ function computeRowLengths(size) {
                 if (data.error) {
                     throw new Error(data.error);
                 }
-                
                 const endTime = performance.now();
                 const duration = (endTime - aiStartTime) / 1000;
                 if (!isBatchRunning) {
                     logAI(`--- (雲端) 運算耗時: ${duration.toFixed(2)} 秒 ---`);
                 }
-                
                 isAIThinking = false;
                 handleAIMoveResult(data.bestMove);
             })
             .catch(error => {
                 console.error('Colab Fetch Error:', error);
-                // **** 修改點：這裡不再呼叫 useLocalWorker，而是直接報錯 ****
                 logAI(`--- [錯誤] 連線失敗 (${error.message}) ---`);
                 alert(`❌ 雲端連線失敗！\n錯誤訊息: ${error.message}\n\n請檢查 Colab 是否正在執行，或網址是否正確。\n若要使用本機運算，請取消勾選「啟用雲端加速」。`);
-                
-                resetAIState(); // 重置 AI 狀態，讓使用者可以重新操作
+                resetAIState();
             });
 
         } else {
-            // **本機邏輯**
             logAI(`--- [本機] 使用瀏覽器 Worker 運算 ---`);
             useLocalWorker(payload);
         }
     }
     
-    // 輔助函式：發生錯誤時重置 UI 狀態
     function resetAIState() {
         isAIThinking = false;
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
-        // 如果是批次對戰，可能需要終止
         if (isBatchRunning) {
             stopBatchRun();
             if (batchStatusMessage) batchStatusMessage.textContent = "批次對戰因雲端連線錯誤已終止。";
         }
     }
 
-    // 抽出本機 Worker 呼叫邏輯
     function useLocalWorker(payload) {
         if (!aiWorker) {
             console.error("AI Worker 尚未初始化");
@@ -1471,23 +1411,18 @@ function computeRowLengths(size) {
         if (bestMove && bestMove.dot1 && bestMove.dot2) {
             const dotA = dots[bestMove.dot1.r][bestMove.dot1.c];
             const dotB = dots[bestMove.dot2.r][bestMove.dot2.c];
-
-            // 呼叫包含防呆檢查的 applyMoveToBoard
             const moveResult = applyMoveToBoard(dotA, dotB, currentPlayer);
 
             if (!moveResult.newSegmentDrawn) {
-                // 如果移動無效 (AI 傳回重複步)，直接忽略並切換玩家
                 logAI(`--- [錯誤] AI 傳回無效移動 (已重複或違規) ---`);
                 switchPlayer();
                 return;
             }
             
             drawCanvas();
-
             const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
             const turnID = turnCounter - 1; 
             exportCanvasAsPNG(gameID, turnID);
-
             updateUI(); 
 
             if (moveResult.gameEnded) {
@@ -1512,13 +1447,11 @@ function computeRowLengths(size) {
         }
     }
     
-    // 產生棋盤快照字串
     function getBoardStateString(currentLines) {
         if (!sortedLineIds || sortedLineIds.length === 0) {
             console.error("sortedLineIds 尚未初始化！");
             return "";
         }
-        
         const stateChars = sortedLineIds.map(id => {
             const line = currentLines[id];
             if (!line || !line.drawn) {
@@ -1532,12 +1465,10 @@ function computeRowLengths(size) {
             }
             return '0'; 
         });
-        
         return stateChars.join('');
     }
 
 
-    // **** 核心修改：申請移動前的嚴格檢查 (防呆機制) ****
     function applyMoveToBoard(dotA, dotB, player) {
         
         const stateBefore = getBoardStateString(lines);
@@ -1548,21 +1479,17 @@ function computeRowLengths(size) {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
         
-        // --- 1. 預先檢查：這條線是否包含至少一段新線？ ---
         let hasNewSegment = false;
         for (const id of segmentIds) {
-            // 如果線段存在 且 尚未被畫過 => 有效
             if (lines[id] && !lines[id].drawn) {
                 hasNewSegment = true;
                 break;
             }
         }
         
-        // 如果整條線都是舊的，直接拒絕，不准修改任何狀態 (sharedBy 也不准改)
         if (!hasNewSegment) {
             return { newSegmentDrawn: false, gameEnded: false, scoreGained: 0 };
         }
-        // ----------------------------------------------
 
         let newSegmentDrawn = false; 
         for (const id of segmentIds) {
@@ -1646,7 +1573,6 @@ function computeRowLengths(size) {
         };
     }
     
-    // (輔助函式：安全地處理 CSV 字串)
     function escapeCSV(str) {
         if (str === null || str === undefined) return '';
         let result = String(str);
@@ -1657,7 +1583,6 @@ function computeRowLengths(size) {
         return result;
     }
 
-    // 啟用/禁用所有 UI 控制項
     function toggleUIControls(isEnabled) {
         uiControls.forEach(control => {
             if (control) {
@@ -1666,72 +1591,52 @@ function computeRowLengths(size) {
         });
     }
 
-    // 開始批次對戰
     function startBatchRun() {
         const gameCount = parseInt(batchCountInput.value, 10);
         if (isNaN(gameCount) || gameCount <= 0) {
             alert("請輸入有效的對戰次數 (大於 0)。");
             return;
         }
-        
-        // **** (新功能) 批次模式下不允許佈局 ****
         if (isSetupMode) {
             alert("請先完成或退出佈局模式，再開始批次對戰。");
             return;
         }
-
         isBatchRunning = true;
-        
         pngStepLog = [];
         batchLog = [];
-        
         batchTotalGames = gameCount;
         batchGamesCompleted = 0;
-
         toggleUIControls(false);
         startBatchButton.classList.add('hidden');
         stopBatchButton.classList.remove('hidden');
-        
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
-
         gameModeSelect.value = "2";
-        
         updateAITypeVisibility(); 
-        
         initGame();
     }
     
-    // 終止批次對戰
     function stopBatchRun() {
         if (!isBatchRunning) return; 
-
         if (confirm("您確定要終止批次對戰嗎？目前已完成的紀錄將會匯出。")) {
             isBatchRunning = false;
-            
             if (isAIThinking) {
                 aiWorker.terminate();
                 isAIThinking = false;
             }
-
             toggleUIControls(true);
             startBatchButton.classList.remove('hidden');
             stopBatchButton.classList.add('hidden');
-            
             if (batchStatusMessage) {
                 batchStatusMessage.textContent = `批次已手動終止 (完成 ${batchGamesCompleted} 場)。`;
             }
-
             exportBatchLog();
         }
     }
 
-    // 匯出 *批次* 遊戲紀錄 (多場合併)
     function exportBatchLog() {
-        // (*** 取得共用時間戳 ***)
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
 
-        // --- 1. 處理 CSV ---
         if (!batchLog || batchLog.length === 0) {
             console.warn("沒有可匯出的批次 CSV 紀錄。");
         } else {
@@ -1795,27 +1700,22 @@ function computeRowLengths(size) {
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
             const filename = `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`;
-            
             triggerDownload(blob, filename);
         }
-        
-        // --- 2. 處理 PNG ZIP (**** 修改 ****) ---
         if (pngStepLog.length === 0) {
             console.warn("沒有可匯出的批次 PNG 紀錄。");
         } else {
             const zipFilename = `triangle_batch_steps_${batchLog.length}_games_${timestamp}.zip`;
-            createAndDownloadZip(zipFilename); // 傳入共用的時間戳檔名
+            createAndDownloadZip(zipFilename); 
         }
     }
 
 
-    // 匯出 *單場* 遊戲紀錄 (CSV/Excel)
     function exportGameLog() {
         if (!gameHistoryLog.turns || gameHistoryLog.turns.length === 0) {
             alert("尚未有任何遊戲紀錄 (目前這場)。");
             return;
         }
-
         const headers = [
             "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
@@ -1837,7 +1737,6 @@ function computeRowLengths(size) {
             csvContent += `# AI (P2) 類型: ${gameHistoryLog.settings.aiTypeP2}\n`;
         }
         csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
-        // **** (新功能) 標記是否從佈局開始 ****
         if (gameHistoryLog.settings.startedFromLayout) {
              csvContent += `# 狀態: 從佈局開始\n`;
         }
@@ -1876,14 +1775,12 @@ function computeRowLengths(size) {
         const date = new Date(gameHistoryLog.settings.dateTime);
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         
-        // **** (新功能) 佈局模式使用不同檔名 ****
         const filenamePrefix = gameHistoryLog.settings.startedFromLayout ? "triangle_layout_log_" : "triangle_game_log_";
         const filename = `${filenamePrefix}${timestamp}.csv`;
         
         triggerDownload(blob, filename);
     }
     
-    // (輔助函式：觸發下載)
     function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1895,7 +1792,6 @@ function computeRowLengths(size) {
         URL.revokeObjectURL(url);
     }
 
-    // (建立並下載 ZIP 檔案)
     function createAndDownloadZip(customFilename = null) {
         if (typeof JSZip === 'undefined') {
             console.error("JSZip 函式庫未載入！");
@@ -1909,9 +1805,7 @@ function computeRowLengths(size) {
 
         const zip = new JSZip();
         
-        // **** (新功能) 如果是從佈局開始，加入第 0 步 (初始狀態) ****
         if (gameHistoryLog.settings.startedFromLayout && turnCounter > 0) {
-            // 第 0 步 (Turn 0) 已經在 startGameFromLayout 時被記錄
         }
 
         pngStepLog.forEach(entry => {
@@ -1921,30 +1815,25 @@ function computeRowLengths(size) {
 
         zip.generateAsync({ type: "blob" })
             .then(function(blob) {
-                
                 let filename = "";
                 if (customFilename) {
                     filename = customFilename;
                 } else {
-                    // 非批次模式的預設檔名
                     const date = new Date();
                     const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
                     filename = `triangle_steps_${timestamp}.zip`;
                 }
-                
                 triggerDownload(blob, filename);
             });
     }
 
     
-    // 匯出棋盤為 PNG (主要邏輯)
     function exportCanvasAsPNG(gameID = null, turnID = null) {
         if (!canvas) {
             alert("找不到畫布！");
             return;
         }
 
-        // 1. 建立一個暫時的 (off-screen) 畫布
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         tempCanvas.width = canvas.width;
@@ -1953,46 +1842,33 @@ function computeRowLengths(size) {
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         tempCtx.drawImage(canvas, 0, 0);
 
-        // 2. 產生檔案名稱
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
         let filename = "";
 
 
         if (turnID === null && gameID === null) {
-            // --- 情況 1: 手動點擊匯出按鈕 (立即下載) ---
-            // (**** 新功能) 佈局模式下使用不同檔名 ****
             const prefix = isSetupMode ? "triangle_layout_" : "triangle_board_";
             filename = `${prefix}${timestamp}.png`;
-            
             tempCanvas.toBlob(function(blob) {
                 triggerDownload(blob, filename);
             });
 
         } else if (turnID !== null) {
-            // --- 情況 2: 遊戲中的步驟 (一律暫存) ---
             const turnIdStr = String(turnID).padStart(3, '0');
-            
             if (isBatchRunning) {
-                // 批次模式：檔名包含 Game ID
                 const gameIdStr = String(gameID).padStart(3, '0');
                 filename = `Game_${gameIdStr}_Turn_${turnIdStr}.png`;
             } else {
-                // 非批次模式：檔名不含 Game ID
-                // (**** 新功能) 區分一般遊戲和佈局遊戲 ****
                 const prefix = gameHistoryLog.settings.startedFromLayout ? "Layout_Turn_" : "Turn_";
                 filename = `triangle_board_${prefix}${turnIdStr}.png`;
             }
-            
-            // 轉換為 data URL 並儲存
             const dataURL = tempCanvas.toDataURL('image/png');
             pngStepLog.push({ filename: filename, data: dataURL });
 
         } else if (isBatchRunning && turnID === null) {
-            // --- 情況 3: 批次模式的 *最終* 畫面 (也暫存) ---
             const gameIdStr = String(gameID).padStart(3, '0');
             filename = `Game_${gameIdStr}_FINAL_Board.png`;
-            
             const dataURL = tempCanvas.toDataURL('image/png');
             pngStepLog.push({ filename: filename, data: dataURL });
         }
@@ -2000,7 +1876,6 @@ function computeRowLengths(size) {
 
     // ----------------------------
     
-    // 綁定/解除 畫布事件監聽器
     function removeCanvasListeners() {
         canvas.removeEventListener('mousedown', handleDragStart);
         canvas.removeEventListener('mousemove', handleDragMove);
@@ -2027,14 +1902,12 @@ function computeRowLengths(size) {
     }
 
     
-    // 綁定 *非畫布* 事件
     resetButton.addEventListener('click', initGame);
     resetButtonModal.addEventListener('click', initGame);
     
     if (confirmLineButton) confirmLineButton.addEventListener('click', confirmLine);
     if (cancelLineButton) cancelLineButton.addEventListener('click', cancelLine);
     
-    // **** (新功能) 綁定佈局模式按鈕 ****
     if (setupModeButton) setupModeButton.addEventListener('click', toggleSetupMode);
     if (setupP1Button) setupP1Button.addEventListener('click', () => applySetupLine(1));
     if (setupP2Button) setupP2Button.addEventListener('click', () => applySetupLine(2));
@@ -2045,24 +1918,31 @@ function computeRowLengths(size) {
         gameModeSelect.addEventListener('change', initGame);
         gameModeSelect.addEventListener('change', updateAITypeVisibility);
     }
-    if (boardSizeSelect) boardSizeSelect.addEventListener('change', initGame);
+    if (boardSizeSelect) {
+        boardSizeSelect.addEventListener('change', () => {
+            if (boardSizeSelect.value === 'custom') {
+                customBoardInputGroup.classList.remove('hidden');
+            } else {
+                customBoardInputGroup.classList.add('hidden');
+            }
+            initGame();
+        });
+    }
+    if (customBoardPatternInput) {
+        customBoardPatternInput.addEventListener('change', initGame);
+    }
+
     if (lineLengthSelect) lineLengthSelect.addEventListener('change', initGame);
-    
     if (startPlayerSelect) startPlayerSelect.addEventListener('change', initGame);
-    
     if (scoreAndGoCheckbox) scoreAndGoCheckbox.addEventListener('change', initGame);
-    
+    if (allowShorterLinesCheckbox) allowShorterLinesCheckbox.addEventListener('change', initGame);
     if (inputModeSelect) inputModeSelect.addEventListener('change', initGame);
-    
     if (aiP1TypeSelect) aiP1TypeSelect.addEventListener('change', initGame);
     if (aiP2TypeSelect) aiP2TypeSelect.addEventListener('change', initGame);
-    
     if (exportLogButton) exportLogButton.addEventListener('click', exportGameLog);
     if (exportLogButtonModal) exportLogButtonModal.addEventListener('click', exportGameLog);
-    
     if (exportPNGButton) exportPNGButton.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
     if (exportPNGButtonModal) exportPNGButtonModal.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
-
     if (modalOverlay) {
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
@@ -2070,24 +1950,17 @@ function computeRowLengths(size) {
             }
         });
     }
-
-    if (startBatchButton) {
-        startBatchButton.addEventListener('click', startBatchRun);
-    }
-    if (stopBatchButton) {
-        stopBatchButton.addEventListener('click', stopBatchRun);
-    }
+    if (startBatchButton) startBatchButton.addEventListener('click', startBatchRun);
+    if (stopBatchButton) stopBatchButton.addEventListener('click', stopBatchRun);
 
 
     // ===================================
     // **** 機器訓練邏輯 (Genetic Algorithm) ****
     // ===================================
 
-    // 開啟訓練面板
     openTrainingBtn.addEventListener('click', () => {
         trainingPanel.classList.remove('hidden');
-        if (strategyAnalysisContainer) strategyAnalysisContainer.classList.remove('hidden'); // 顯示分析區塊
-        // 自動切換到較小的棋盤以加速訓練
+        if (strategyAnalysisContainer) strategyAnalysisContainer.classList.remove('hidden'); 
         if (boardSizeSelect.value !== 'tiny') {
             if(confirm("建議切換到「最小」棋盤以大幅提升訓練速度。是否切換？")) {
                 boardSizeSelect.value = 'tiny';
@@ -2109,15 +1982,13 @@ function computeRowLengths(size) {
     
     applyWeightsBtn.addEventListener('click', () => {
         if (bestWeightsSoFar) {
-            // 自動將 AI 類型設為 Trained
             if (aiP2TypeSelect) {
                 aiP2TypeSelect.value = 'trained';
-                // 顯示隱藏的選單
                 updateAITypeVisibility();
             }
             alert("已應用最佳權重！現在請選擇「Trained (訓練模型)」作為 AI 類型開始遊戲。");
             trainingPanel.classList.add('hidden');
-            initGame(); // 重啟遊戲以應用
+            initGame(); 
         }
     });
 
@@ -2127,32 +1998,28 @@ function computeRowLengths(size) {
         maxGenerations = parseInt(trainGenerationsEl.value, 10);
         const popSize = parseInt(trainPopSizeEl.value, 10);
         
-        // 1. 初始化族群 (隨機權重)
         trainingPopulation = [];
         for (let i = 0; i < popSize; i++) {
             trainingPopulation.push({
                 id: i,
                 weights: {
-                    scoreScale: 150, // 固定
-                    threatScale: 25, // 固定
-                    doubleSetupScale: 75, // 固定
-                    // 可變基因 (隨機初始化)
-                    p1ThreatVal: Math.floor(Math.random() * 100) - 50, // -50 ~ 50
+                    scoreScale: 150, 
+                    threatScale: 25, 
+                    doubleSetupScale: 75, 
+                    p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
                     p2ThreatVal: Math.floor(Math.random() * 100) - 50,
-                    p1DoubleVal: Math.floor(Math.random() * 200) - 100, // -100 ~ 100
+                    p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
                     p2DoubleVal: Math.floor(Math.random() * 200) - 100
                 },
                 fitness: 0
             });
         }
         
-        // UI 更新
         startTrainingBtn.classList.add('hidden');
         stopTrainingBtn.classList.remove('hidden');
         trainProgressBar.classList.add('animated');
         trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
         
-        // 發送第一代到 Worker
         sendGenerationToWorker();
     }
 
@@ -2166,18 +2033,15 @@ function computeRowLengths(size) {
 
     function sendGenerationToWorker() {
         if (!isTraining) return;
-        
-        // 準備當前遊戲設定給 Worker 模擬用
-        // 確保 Worker 知道棋盤長怎樣
         const gameConfig = {
             dots: dots,
             lines: lines,
             triangles: triangles,
             totalTriangles: totalTriangles,
             requiredLineLength: REQUIRED_LINE_LENGTH,
-            isScoreAndGoAgain: scoreAndGoCheckbox.checked
+            isScoreAndGoAgain: scoreAndGoCheckbox.checked,
+            allowShorterLines: allowShorterLinesCheckbox.checked 
         };
-        
         aiWorker.postMessage({
             command: 'train_generation',
             population: trainingPopulation,
@@ -2188,11 +2052,9 @@ function computeRowLengths(size) {
     function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard) {
         if (!isTraining) return;
 
-        // 1. 找出最佳個體
         populationWithFitness.sort((a, b) => b.fitness - a.fitness);
         const bestAgent = populationWithFitness[0];
         
-        // 2. 更新 UI (權重)
         bestWeightsSoFar = bestAgent.weights;
         trainGenEl.textContent = currentGeneration;
         trainFitnessEl.textContent = bestAgent.fitness; 
@@ -2200,12 +2062,9 @@ function computeRowLengths(size) {
         wThreatEl.textContent = `P1:${bestAgent.weights.p1ThreatVal}, P2:${bestAgent.weights.p2ThreatVal}`;
         wSetupEl.textContent = `P1:${bestAgent.weights.p1DoubleVal}, P2:${bestAgent.weights.p2DoubleVal}`;
         
-        // **** 新增：更新策略分析報告 ****
         if (strategyKeysList) {
             updateStrategyAnalysis(bestAgent.weights);
         }
-        
-        // **** 新增：更新棋盤預覽圖片 ****
         if (bestAgentBoard) {
             renderMiniBoard(bestAgentBoard);
         }
@@ -2213,37 +2072,28 @@ function computeRowLengths(size) {
         const progressPercent = (currentGeneration / maxGenerations) * 100;
         trainProgressBar.style.width = `${progressPercent}%`;
 
-        // 3. 檢查是否結束
         if (currentGeneration >= maxGenerations) {
             finishTraining();
             return;
         }
 
-        // 4. 演化下一代 (Selection, Crossover, Mutation)
         trainingPopulation = evolvePopulation(populationWithFitness);
         
         currentGeneration++;
         trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
-        
-        // 5. 繼續下一代
         sendGenerationToWorker(); 
     }
     
-    // **** 新功能：策略分析邏輯 ****
     function updateStrategyAnalysis(w) {
         strategyKeysList.innerHTML = '';
-        
-        // 分析 P2 (Max) 的權重來推斷勝出策略
         const p2T = w.p2ThreatVal;
         const p2D = w.p2DoubleVal;
-        
         const addKey = (text) => {
             const li = document.createElement('li');
             li.textContent = text;
             strategyKeysList.appendChild(li);
         };
         
-        // 分析 1: 佈局 vs 進攻
         if (Math.abs(p2D) > Math.abs(p2T) * 1.5) {
             addKey("✨ 必勝關鍵：高度重視雙重陷阱佈局 (Double Setup)，優先於單純製造威脅。");
         } else if (p2T > 30) {
@@ -2251,15 +2101,11 @@ function computeRowLengths(size) {
         } else {
             addKey("⚖️ 必勝關鍵：在佈局與進攻之間取得平衡，不偏廢任一方。");
         }
-        
-        // 分析 2: 獲勝徵兆 (正負值判斷)
         if (p2T > 0 && p2D > 0) {
             addKey("📈 獲勝徵兆：AI 積極尋找能同時增加威脅與佈局的機會。");
         } else if (p2T < 0) {
             addKey("🛡️ 獲勝徵兆：AI 傾向於防守反擊，刻意避免過早暴露單一威脅。");
         }
-        
-        // 分析 3: 強度評估
         const aggression = Math.abs(p2T) + Math.abs(p2D);
         if (aggression > 100) {
             addKey("🔥 風格：高風險高回報，對關鍵點位的爭奪非常激烈。");
@@ -2268,39 +2114,28 @@ function computeRowLengths(size) {
         }
     }
     
-    // **** 新功能：繪製預覽棋盤 ****
     function renderMiniBoard(linesData) {
         if (!strategyBoardCanvasWrapper) return;
-        
-        strategyBoardCanvasWrapper.innerHTML = ''; // 清空
-        
-        // 建立一個新的 canvas
+        strategyBoardCanvasWrapper.innerHTML = ''; 
         const miniCanvas = document.createElement('canvas');
-        // 設定較小的尺寸
-        const scale = 0.6; // 縮小 60%
+        const scale = 0.6; 
         miniCanvas.width = canvas.width * scale;
         miniCanvas.height = canvas.height * scale;
         const mCtx = miniCanvas.getContext('2d');
         
-        // 背景
         mCtx.fillStyle = '#f8f9fa';
         mCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-        
-        // 縮放繪圖上下文
         mCtx.scale(scale, scale);
         
-        // 繪製線條 (來自 linesData)
         for (const id in linesData) {
             const line = linesData[id];
             if (line.drawn) {
-                // 簡化的線條繪製邏輯
                 mCtx.beginPath();
                 mCtx.moveTo(line.p1.x, line.p1.y);
                 mCtx.lineTo(line.p2.x, line.p2.y);
-                // 使用原版顏色
                 const color = (line.player === 1) ? '#3498db' : '#e74c3c';
                 mCtx.strokeStyle = color;
-                mCtx.lineWidth = 4; // 稍微細一點
+                mCtx.lineWidth = 4; 
                 mCtx.stroke();
                 
                 if (line.sharedBy !== 0 && line.sharedBy !== line.player) {
@@ -2310,7 +2145,6 @@ function computeRowLengths(size) {
                     mCtx.stroke();
                 }
             } else {
-                // 虛線 (未連接) - 選繪
                 mCtx.beginPath();
                 mCtx.moveTo(line.p1.x, line.p1.y);
                 mCtx.lineTo(line.p2.x, line.p2.y);
@@ -2319,8 +2153,6 @@ function computeRowLengths(size) {
                 mCtx.stroke();
             }
         }
-        
-        // 繪製點 (使用全域 dots)
         dots.forEach(row => {
             row.forEach(dot => {
                 mCtx.beginPath();
@@ -2329,8 +2161,6 @@ function computeRowLengths(size) {
                 mCtx.fill();
             });
         });
-        
-        // 將 canvas 轉為圖片並顯示
         const img = document.createElement('img');
         img.src = miniCanvas.toDataURL();
         img.className = 'preview-board-img';
@@ -2340,25 +2170,15 @@ function computeRowLengths(size) {
     function evolvePopulation(oldPop) {
         const newPop = [];
         const popSize = oldPop.length;
-        
-        // 菁英保留 (Elitism): 保留前 20%
         const eliteCount = Math.floor(popSize * 0.2);
         for (let i = 0; i < eliteCount; i++) {
-            newPop.push({ ...oldPop[i], fitness: 0 }); // 重置 fitness
+            newPop.push({ ...oldPop[i], fitness: 0 }); 
         }
-        
-        // 補滿剩餘人口
         while (newPop.length < popSize) {
-            // 輪盤選擇法 (Roulette Wheel Selection) 或是簡單的錦標賽
             const parent1 = tournamentSelect(oldPop);
             const parent2 = tournamentSelect(oldPop);
-            
-            // 交配 (Crossover)
             const childWeights = crossover(parent1.weights, parent2.weights);
-            
-            // 突變 (Mutation)
             mutate(childWeights);
-            
             newPop.push({
                 id: newPop.length,
                 weights: childWeights,
@@ -2379,7 +2199,6 @@ function computeRowLengths(size) {
     }
 
     function crossover(w1, w2) {
-        // 均勻交配
         return {
             scoreScale: 150,
             threatScale: 25,
@@ -2400,23 +2219,11 @@ function computeRowLengths(size) {
         if (Math.random() < mutationRate) w.p1DoubleVal += (Math.random() - 0.5) * mutationStrength;
         if (Math.random() < mutationRate) w.p2DoubleVal += (Math.random() - 0.5) * mutationStrength;
         
-        // 取整
         w.p1ThreatVal = Math.round(w.p1ThreatVal);
         w.p2ThreatVal = Math.round(w.p2ThreatVal);
         w.p1DoubleVal = Math.round(w.p1DoubleVal);
         w.p2DoubleVal = Math.round(w.p2DoubleVal);
     }
-
-    function finishTraining() {
-        isTraining = false;
-        trainStatusEl.textContent = "訓練完成！您可以應用最佳參數到遊戲中。";
-        stopTrainingBtn.classList.add('hidden');
-        startTrainingBtn.classList.remove('hidden');
-        trainProgressBar.classList.remove('animated');
-        applyWeightsBtn.disabled = false;
-    }
-
-
-    // 啟動遊戲
+    
     initGame();
 });
