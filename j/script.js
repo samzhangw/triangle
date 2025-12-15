@@ -2031,6 +2031,13 @@ document.addEventListener('DOMContentLoaded', () => {
         trainStatusEl.textContent = "訓練已手動停止";
     }
 
+    // **** 新增：結束訓練並啟用按鈕 ****
+    function finishTraining() {
+        stopTraining();
+        if (trainStatusEl) trainStatusEl.textContent = "訓練已完成！";
+        alert(`訓練完成！共模擬 ${currentGeneration} 個世代。`);
+    }
+
     function sendGenerationToWorker() {
         if (!isTraining) return;
         const gameConfig = {
@@ -2056,6 +2063,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const bestAgent = populationWithFitness[0];
         
         bestWeightsSoFar = bestAgent.weights;
+        
+        // **** 修正：每一代都啟用按鈕 ****
+        if (applyWeightsBtn) applyWeightsBtn.disabled = false;
+
         trainGenEl.textContent = currentGeneration;
         trainFitnessEl.textContent = bestAgent.fitness; 
         wScoreEl.textContent = "150 (固定)";
