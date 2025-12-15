@@ -131,20 +131,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; 
     const ANGLE_TOLERANCE = 1.5; 
 
-    // 依棋盤大小產生 ROW_LENGTHS
-    function computeRowLengths(size) {
-        switch (size) {
-            case 'tiny':
-                return [2, 3, 2];
-            case 'small':
-                return [3, 4, 5, 4, 3];
-            case 'large':
-                return [5, 6, 7, 8, 9, 8, 7, 6, 5];
-            case 'medium':
-            default:
-                return [4, 5, 6, 7, 6, 5, 4];
-        }
+// 在 m/script.js 中找到 computeRowLengths 函式
+function computeRowLengths(size) {
+    switch (size) {
+        // --- 原有的與新稱呼 ---
+        case 'tiny':
+            return [2, 3, 2];
+
+        // --- 新增的佈局 (2-3-2, 3-4-3, 4-5-4 等等) ---
+        case 'small_343':
+            return [3, 4, 3];
+        case 'medium_454':
+            return [4, 5, 4];
+        case 'large_565':
+            return [5, 6, 5];
+        
+        // --- 原有的標準六邊形佈局 ---
+        case 'small':
+            return [3, 4, 5, 4, 3];
+        case 'large':
+            return [5, 6, 7, 8, 9, 8, 7, 6, 5];
+        case 'medium':
+        default:
+            return [4, 5, 6, 7, 6, 5, 4];
     }
+}
 
     // 玩家顏色
     const PLAYER_COLORS = {
