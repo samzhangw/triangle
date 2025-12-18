@@ -1357,6 +1357,25 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUI();
         drawCanvas();
         updateUndoButtonState();
+
+        // **** 新增：Undo 後如果是電腦的回合，自動觸發 AI ****
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        
+        // 判斷回復後的當前玩家是否為 AI
+        let isCurrentPlayerAI = false;
+        if (currentPlayer === 1 && isP1AI) {
+            isCurrentPlayerAI = true;
+        } else if (currentPlayer === 2 && isP2AI) {
+            isCurrentPlayerAI = true;
+        }
+
+        if (isCurrentPlayerAI) {
+            // 使用 setTimeout 讓 UI 先更新畫面，再開始思考
+            setTimeout(() => {
+                triggerAIMove();
+            }, 50);
+        }
     }
     
     function updateUndoButtonState() {
