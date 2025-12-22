@@ -208,23 +208,25 @@
                     </select>
                 </div>
                 
-                <div class="control-group hidden" id="ai-p1-type-group">
-                    <label for="ai-p1-type-select" class="control-label">AI (P1) 類型</label>
-                    <select id="ai-p1-type-select" class="control-select">
-                        <option value="minimax" selected>Minimax (智能)</option>
-                        <option value="greedy">Greedy (貪婪)</option>
-                        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
-                        <option value="trained">Trained (訓練模型)</option>
-                    </select>
-                </div>
-                <div class="control-group hidden" id="ai-p2-type-group">
-                    <label for="ai-p2-type-select" class="control-label">AI (P2) 類型</label>
-                    <select id="ai-p2-type-select" class="control-select">
-                        <option value="minimax" selected>Minimax (智能)</option>
-                        <option value="greedy">Greedy (貪婪)</option>
-                        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
-                        <option value="trained">Trained (訓練模型)</option>
-                    </select>
+<div class="control-group hidden" id="ai-p1-type-group">
+    <label for="ai-p1-type-select" class="control-label">AI (P1) 類型</label>
+    <select id="ai-p1-type-select" class="control-select">
+        <option value="minimax" selected>Minimax (智能)</option>
+        <option value="alphazero">AlphaZero (深度學習)</option> <option value="greedy">Greedy (貪婪)</option>
+        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
+        <option value="trained">Trained (訓練模型)</option>
+    </select>
+</div>
+
+<div class="control-group hidden" id="ai-p2-type-group">
+    <label for="ai-p2-type-select" class="control-label">AI (P2) 類型</label>
+    <select id="ai-p2-type-select" class="control-select">
+        <option value="minimax" selected>Minimax (智能)</option>
+        <option value="alphazero">AlphaZero (深度學習)</option> <option value="greedy">Greedy (貪婪)</option>
+        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
+        <option value="trained">Trained (訓練模型)</option>
+    </select>
+</div>
                 </div>
                 <div class="control-group">
                     <label for="input-mode-select" class="control-label">操作模式</label>
