@@ -78,8 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const trainStatusEl = document.getElementById('train-status');
     const trainPopSizeEl = document.getElementById('train-pop-size');
     const trainGenerationsEl = document.getElementById('train-generations');
-    // [新增] 勾選框
+    // [新增] 繼承與準確率 UI 元素
     const trainInheritCheckbox = document.getElementById('train-inherit-checkbox');
+    const trainAccuracyEl = document.getElementById('train-accuracy');
     
     const wScoreEl = document.getElementById('w-score');
     const wThreatEl = document.getElementById('w-threat');
@@ -259,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 handleAIMoveResult(data.bestMove);
             } else if (data.type === 'training_result') {
-                handleTrainingGenerationComplete(data.population, data.bestAgentBoard);
+                handleTrainingGenerationComplete(data.population, data.bestAgentBoard, data.validationStats);
             }
         };
         aiWorker.onerror = (e) => {
@@ -2276,7 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard) {
+    function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard, validationStats) {
         if (!isTraining) return;
 
         populationWithFitness.sort((a, b) => b.fitness - a.fitness);
@@ -2296,6 +2297,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         trainGenEl.textContent = currentGeneration;
         trainFitnessEl.textContent = bestAgent.fitness; 
+        
+        // [新增] 更新準確率顯示
+        if (validationStats && trainAccuracyEl) {
+            const acc = validationStats.winRate.toFixed(1);
+            trainAccuracyEl.textContent = `${acc}%`;
+            
+            // 根據勝率改變顏色
+            if (validationStats.winRate >= 80) trainAccuracyEl.style.color = '#27ae60'; // 綠色
+            else if (validationStats.winRate >= 50) trainAccuracyEl.style.color = '#f39c12'; // 橘色
+            else trainAccuracyEl.style.color = '#e74c3c'; // 紅色
+        }
+
         wScoreEl.textContent = "150 (固定)";
         wThreatEl.textContent = `P1:${bestAgent.weights.p1ThreatVal}, P2:${bestAgent.weights.p2ThreatVal}`;
         wSetupEl.textContent = `P1:${bestAgent.weights.p1DoubleVal}, P2:${bestAgent.weights.p2DoubleVal}`;
