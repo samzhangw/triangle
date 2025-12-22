@@ -78,6 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const trainStatusEl = document.getElementById('train-status');
     const trainPopSizeEl = document.getElementById('train-pop-size');
     const trainGenerationsEl = document.getElementById('train-generations');
+    // [新增] 勾選框
+    const trainInheritCheckbox = document.getElementById('train-inherit-checkbox');
     
     const wScoreEl = document.getElementById('w-score');
     const wThreatEl = document.getElementById('w-threat');
@@ -212,6 +214,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentGeneration = 0;
     let maxGenerations = 50;
     let bestWeightsSoFar = null; 
+
+    // [新增] 初始化時嘗試讀取本地儲存的權重
+    try {
+        const storedWeights = localStorage.getItem('triangle_ai_best_weights');
+        if (storedWeights) {
+            bestWeightsSoFar = JSON.parse(storedWeights);
+            // 更新 UI 顯示紀錄中的數值
+            if (wThreatEl) wThreatEl.textContent = `P1:${bestWeightsSoFar.p1ThreatVal}, P2:${bestWeightsSoFar.p2ThreatVal} (歷史紀錄)`;
+            if (wSetupEl) wSetupEl.textContent = `P1:${bestWeightsSoFar.p1DoubleVal}, P2:${bestWeightsSoFar.p2DoubleVal} (歷史紀錄)`;
+            if (applyWeightsBtn) applyWeightsBtn.disabled = false;
+        }
+    } catch (e) {
+        console.warn("無法讀取 LocalStorage:", e);
+    }
 
     // **** Undo 堆疊 ****
     let undoStack = [];
@@ -2163,18 +2179,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const popSize = parseInt(trainPopSizeEl.value, 10);
         
         trainingPopulation = [];
+
+        // [修改] 決定是否使用基礎權重 (從記憶體或 LocalStorage)
+        let baseWeights = null;
+        if (trainInheritCheckbox && trainInheritCheckbox.checked) {
+            if (bestWeightsSoFar) {
+                baseWeights = bestWeightsSoFar;
+            } else {
+                // 如果記憶體沒有，再試一次 LocalStorage (防呆)
+                const stored = localStorage.getItem('triangle_ai_best_weights');
+                if (stored) {
+                    try { baseWeights = JSON.parse(stored); } catch(e) {}
+                }
+            }
+        }
+
         for (let i = 0; i < popSize; i++) {
+            let initialWeights;
+
+            // [修改] 初始族群生成策略
+            if (baseWeights) {
+                if (i === 0) {
+                    // 1. 菁英保留：完全複製最佳權重
+                    initialWeights = { ...baseWeights };
+                } else if (i < popSize * 0.7) {
+                    // 2. 變異探索：以最佳權重為基礎進行變異 (70%)
+                    initialWeights = { ...baseWeights };
+                    mutate(initialWeights);
+                } else {
+                    // 3. 隨機引入：保持多樣性，避免陷入局部最佳解 (剩餘)
+                    initialWeights = createRandomWeights();
+                }
+            } else {
+                // 沒有繼承時，全部隨機
+                initialWeights = createRandomWeights();
+            }
+
             trainingPopulation.push({
                 id: i,
-                weights: {
-                    scoreScale: 150, 
-                    threatScale: 25, 
-                    doubleSetupScale: 75, 
-                    p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
-                    p2ThreatVal: Math.floor(Math.random() * 100) - 50,
-                    p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
-                    p2DoubleVal: Math.floor(Math.random() * 200) - 100
-                },
+                weights: initialWeights,
                 fitness: 0
             });
         }
@@ -2185,6 +2228,19 @@ document.addEventListener('DOMContentLoaded', () => {
         trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
         
         sendGenerationToWorker();
+    }
+
+    // [新增] 獨立出隨機權重生成函式
+    function createRandomWeights() {
+        return {
+            scoreScale: 150, 
+            threatScale: 25, 
+            doubleSetupScale: 75, 
+            p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
+            p2ThreatVal: Math.floor(Math.random() * 100) - 50,
+            p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
+            p2DoubleVal: Math.floor(Math.random() * 200) - 100
+        };
     }
 
     function stopTraining() {
@@ -2228,6 +2284,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         bestWeightsSoFar = bestAgent.weights;
         
+        // [新增] 將最佳權重儲存到 LocalStorage
+        try {
+            localStorage.setItem('triangle_ai_best_weights', JSON.stringify(bestWeightsSoFar));
+        } catch (e) {
+            console.warn("無法寫入 LocalStorage");
+        }
+
         // **** 修正：每一代都啟用按鈕 ****
         if (applyWeightsBtn) applyWeightsBtn.disabled = false;
 
