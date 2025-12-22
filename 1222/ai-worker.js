@@ -5,7 +5,7 @@
  * 1. Minimax 演算法 (深度解鎖版)
  * 2. Smart Greedy (防守型貪婪)
  * 3. MCTS (長考版)
- * 4. 基因演算法訓練模擬
+ * 4. 基因演算法訓練模擬 (含準確率驗證)
  * ============================================
  */
 
@@ -17,7 +17,7 @@ let REQUIRED_LINE_LENGTH = 1;
 
 // 遊戲規則
 let isScoreAndGoAgain = false; 
-let isAllowShorterLines = false; // [修改] 新增變數：允許短連線
+let isAllowShorterLines = false; // 允許短連線
 const QUIESCENCE_MAX_DEPTH = 3;
 
 // 自訂權重 (用於 Trained 模式)
@@ -48,7 +48,7 @@ self.onmessage = (e) => {
         totalTriangles = data.gameState.totalTriangles;
         REQUIRED_LINE_LENGTH = data.gameState.requiredLineLength;
         isScoreAndGoAgain = data.gameState.isScoreAndGoAgain; 
-        isAllowShorterLines = data.gameState.allowShorterLines; // [修改] 接收參數
+        isAllowShorterLines = data.gameState.allowShorterLines;
         
         if (aiType === 'trained' && data.weights) {
             customWeights = data.weights;
@@ -133,7 +133,6 @@ function findIntermediateDots(dotA, dotB) {
     return intermediateDots;
 }
 
-// [修改] 更新驗證邏輯以支援短連線
 function isValidPreviewLine(dotA, dotB, currentLines) {
     if (!dotA || !dotB) return false;
     const dy = dotB.y - dotA.y;
@@ -150,7 +149,7 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
         segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
     }
     
-    // [修改] 判斷長度邏輯
+    // 判斷長度邏輯
     if (segmentIds.length === 0 && dotA !== dotB) return false;
     
     if (isAllowShorterLines) {
@@ -172,7 +171,7 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
     return true;
 }
 
-// (**** 優化 ****) 快速狀態複製 (用於 MCTS 高頻模擬)
+// 快速狀態複製 (用於 MCTS 高頻模擬)
 function cloneState(lines, triangles) {
     const newLines = {};
     for (const key in lines) {
@@ -308,8 +307,6 @@ function evaluateBoard(currentLines, currentTriangles, weights) {
     const valP1D = w.p1DoubleVal || 100; // Double Setup 權重
     const valP2D = w.p2DoubleVal || -100;
 
-    // 由於 Double Setup 會被計算兩次 (每個三角形算一次)，這裡權重可以除以 2，或者在參數設定上調整
-    // 這裡直接加總，讓它非常有吸引力
     return (p2Score * scoreVal - p1Score * scoreVal) +
            (p1Threats * valP1T + p2Threats * valP2T) +
            (p1DoubleSetups * valP1D + p2DoubleSetups * valP2D) * 0.5;
@@ -472,9 +469,6 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
             node = node.children.reduce((best, child) => {
                 return child.getUCTValue() > best.getUCTValue() ? child : best;
             });
-            // 這裡簡化：不更新 state，假設樹夠淺或依賴 Expansion 建立新 state
-            // 正確做法是 apply move 
-            // 為了 JS 效能，MCTS 這裡通常只做一層擴展或簡單模擬
         }
 
         // 2. Expansion
@@ -533,10 +527,6 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
             const rMove = possibleMoves[moveIdx++];
             steps++;
             
-            // 檢查合法性 (簡單版)
-            // 由於 possibleMoves 是靜態的，已畫過的線可能會被選到，需要過濾
-            // 但 simulateMove 內部會處理嗎？會，但會回傳 scoreGained=0 或 null
-            // 我們這裡手動檢查線段是否被畫過
             let isAlreadyDrawn = false;
             for(let sid of rMove.segmentIds) {
                 if(currentLinesSim[sid] && currentLinesSim[sid].drawn) {
@@ -550,8 +540,6 @@ function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) {
             if (!sim) continue;
             
             currentLinesSim = sim.newLines;
-            // 不更新 triangles 以省時 (只在 evaluate 需要，Rollout 只需分數)
-            // 但如果 "得分再走"，需要知道是否得分。simulateMove 有回傳 scoreGained
             
             if (sim.scoreGained > 0) {
                 simScores[simPlayer] += sim.scoreGained;
@@ -822,16 +810,18 @@ function postIntermediateResult(move, depth, score) {
 
 
 // ==========================================================
-// 基因演算法訓練模擬 (保持不變)
+// 基因演算法訓練模擬 (含準確率驗證)
 // ==========================================================
 
 function runTrainingGeneration(population, gameConfig) {
+    // 1. 更新全域變數
     dots = gameConfig.dots;
     totalTriangles = gameConfig.totalTriangles;
     REQUIRED_LINE_LENGTH = gameConfig.requiredLineLength;
     isScoreAndGoAgain = gameConfig.isScoreAndGoAgain;
-    isAllowShorterLines = gameConfig.allowShorterLines; // [修正] 這裡也需要更新
+    isAllowShorterLines = gameConfig.allowShorterLines; // [重要] 支援短連線
     
+    // 2. 內部訓練 (Agent vs Agent)
     population.forEach(agent => agent.wins = 0);
 
     const MATCHES_PER_AGENT = 2; 
@@ -854,14 +844,101 @@ function runTrainingGeneration(population, gameConfig) {
     population.forEach(agent => { agent.fitness = agent.wins; });
     population.sort((a, b) => b.fitness - a.fitness);
     const bestAgent = population[0];
+    
+    // [新增] 3. 準確率驗證 (Validation): 最強 AI vs Smart Greedy
+    // 進行 10 場對戰 (各先手 5 場)，計算勝率
+    let validationWins = 0;
+    const VALIDATION_MATCHES = 10;
+    
+    for (let v = 0; v < VALIDATION_MATCHES; v++) {
+        const aiIsP1 = (v < VALIDATION_MATCHES / 2); // 前 5 場 P1, 後 5 場 P2
+        const winner = simulateGameVsGreedy(bestAgent.weights, gameConfig.lines, gameConfig.triangles, aiIsP1);
+        
+        if (aiIsP1 && winner === 1) validationWins++;
+        else if (!aiIsP1 && winner === 2) validationWins++;
+    }
+    
+    const winRate = (validationWins / VALIDATION_MATCHES) * 100;
+
+    // 4. 產生預覽棋盤 (展示用)
     const opponent = population[1] || population[population.length - 1]; 
     const showcaseResult = simulateFullGame(bestAgent.weights, opponent.weights, gameConfig.lines, gameConfig.triangles, true);
 
     self.postMessage({
         type: 'training_result',
         population: population,
-        bestAgentBoard: showcaseResult.finalLines 
+        bestAgentBoard: showcaseResult.finalLines,
+        // 回傳驗證數據
+        validationStats: {
+            winRate: winRate
+        }
     });
+}
+
+// [新增] 模擬：加權 AI vs Smart Greedy
+function simulateGameVsGreedy(aiWeights, initialLines, initialTriangles, aiIsP1) {
+    let currentLines = deepCopy(initialLines);
+    let currentTriangles = deepCopy(initialTriangles);
+    let currentPlayer = 1;
+    let scores = { 1: 0, 2: 0 };
+    let filledCount = 0;
+    let movesLimit = 200; 
+
+    while (filledCount < totalTriangles && movesLimit > 0) {
+        movesLimit--;
+        
+        let bestMove = null;
+        
+        // 判斷當前是 訓練AI 還是 Greedy
+        const isTrainingAI = (aiIsP1 && currentPlayer === 1) || (!aiIsP1 && currentPlayer === 2);
+        
+        if (isTrainingAI) {
+            // 使用權重評估 (模擬 Depth=1 的 Minimax)
+            const isMaximizing = (currentPlayer === 2);
+            let allMoves = findAllValidMoves(currentLines);
+            if (allMoves.length === 0) break;
+            
+            // 隨機打亂，避免僵化
+            allMoves.sort(() => Math.random() - 0.5); 
+            
+            let bestVal = isMaximizing ? -Infinity : Infinity;
+            
+            for (const move of allMoves) {
+                const sim = simulateMove(move, currentLines, currentTriangles, currentPlayer);
+                if (!sim) continue;
+                const immediateScore = sim.scoreGained * 1000;
+                const boardVal = evaluateBoard(sim.newLines, sim.newTriangles, aiWeights);
+                let totalVal;
+                // 注意：evaluateBoard 回傳的是 (P2 - P1)，所以 Max 喜歡正，Min 喜歡負
+                if (isMaximizing) totalVal = immediateScore + boardVal;
+                else totalVal = -immediateScore + boardVal;
+                
+                if (isMaximizing) {
+                    if (totalVal > bestVal) { bestVal = totalVal; bestMove = move; }
+                } else {
+                    if (totalVal < bestVal) { bestVal = totalVal; bestMove = move; }
+                }
+            }
+        } else {
+            // 使用 Smart Greedy 策略
+            bestMove = findBestGreedyMove(currentLines, currentTriangles, currentPlayer);
+        }
+
+        if (!bestMove) break;
+        
+        const sim = simulateMove(bestMove, currentLines, currentTriangles, currentPlayer);
+        currentLines = sim.newLines;
+        currentTriangles = sim.newTriangles;
+        
+        if (sim.scoreGained > 0) {
+            scores[currentPlayer] += sim.scoreGained;
+            filledCount += sim.scoreGained;
+            if (isScoreAndGoAgain) continue; 
+        }
+        currentPlayer = (currentPlayer === 1) ? 2 : 1;
+    }
+    
+    return (scores[1] > scores[2]) ? 1 : ((scores[2] > scores[1]) ? 2 : 0);
 }
 
 function simulateFullGame(weightsP1, weightsP2, initialLines, initialTriangles, returnDetails = false) {
