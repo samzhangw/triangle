@@ -8,17 +8,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const player2ScoreBox = document.getElementById('player2-score');
     const gameOverMessage = document.getElementById('game-over-message'); 
     
-    const winnerText = document.getElementById('winner-text'); // (使用修正後的 ID)
+    const winnerText = document.getElementById('winner-text'); 
     
     const confirmLineButton = document.getElementById('confirm-line-button');
     const cancelLineButton = document.getElementById('cancel-line-button');
     const actionBar = document.getElementById('action-bar');
+    
+    // **** 取得佈局模式元素 ****
+    const setupModeButton = document.getElementById('setup-mode-button');
+    const setupActionBar = document.getElementById('setup-action-bar');
+    const setupP1Button = document.getElementById('setup-p1-button');
+    const setupP2Button = document.getElementById('setup-p2-button');
+    const setupClearButton = document.getElementById('setup-clear-button');
+    
     const resetButton = document.getElementById('reset-button');
+    const undoButton = document.getElementById('undo-button'); // Undo 按鈕
     const modalOverlay = document.getElementById('modal-overlay');
     const resetButtonModal = document.getElementById('reset-button-modal');
     const aiThinkingMessage = document.getElementById('ai-thinking-message'); 
     const gameModeSelect = document.getElementById('game-mode-select');
     const boardSizeSelect = document.getElementById('board-size-select');
+    
+    // **** 自訂棋盤元素 ****
+    const customBoardInputGroup = document.getElementById('custom-board-input-group');
+    const customBoardPatternInput = document.getElementById('custom-board-pattern');
+
     const lineLengthSelect = document.getElementById('line-length-select');
     const aiLogContainer = document.getElementById('ai-log-container');
     const aiLogOutput = document.getElementById('ai-log-output');
@@ -31,21 +45,94 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportPNGButton = document.getElementById('export-png-button');
     const exportPNGButtonModal = document.getElementById('export-png-button-modal');
 
-    // (新功能) 取得批次對戰元素
     const batchCountInput = document.getElementById('batch-count-input');
     const startBatchButton = document.getElementById('start-batch-button');
-    // **** (新功能) 取得終止按鈕 ****
     const stopBatchButton = document.getElementById('stop-batch-button');
     
     const batchStatusMessage = document.getElementById('batch-status-message');
-    // (儲存需要被禁用的控制項)
-    let uiControls = [
-        resetButton, exportLogButton, exportPNGButton, 
+    
+    const scoreAndGoCheckbox = document.getElementById('score-and-go-checkbox');
+    // **** 新增規則：允許短線段 ****
+    const allowShorterLinesCheckbox = document.getElementById('allow-shorter-lines-checkbox');
+
+    const inputModeSelect = document.getElementById('input-mode-select');
+    
+    const aiP1TypeGroup = document.getElementById('ai-p1-type-group');
+    const aiP2TypeGroup = document.getElementById('ai-p2-type-group');
+    const aiP1TypeSelect = document.getElementById('ai-p1-type-select');
+    const aiP2TypeSelect = document.getElementById('ai-p2-type-select');
+    
+    const startPlayerSelect = document.getElementById('start-player-select');
+
+    // **** 訓練模式 UI 元素 ****
+    const trainingPanel = document.getElementById('training-panel');
+    const openTrainingBtn = document.getElementById('open-training-btn');
+    const closeTrainingBtn = document.getElementById('close-training-button');
+    const startTrainingBtn = document.getElementById('start-training-btn');
+    const stopTrainingBtn = document.getElementById('stop-training-btn');
+    const applyWeightsBtn = document.getElementById('apply-weights-btn');
+    
+    const trainGenEl = document.getElementById('train-gen');
+    const trainFitnessEl = document.getElementById('train-best-fitness');
+    const trainProgressBar = document.getElementById('train-progress-bar');
+    const trainStatusEl = document.getElementById('train-status');
+    const trainPopSizeEl = document.getElementById('train-pop-size');
+    const trainGenerationsEl = document.getElementById('train-generations');
+    
+    const wScoreEl = document.getElementById('w-score');
+    const wThreatEl = document.getElementById('w-threat');
+    const wSetupEl = document.getElementById('w-setup');
+    
+    // **** 策略分析 UI 元素 ****
+    const strategyAnalysisContainer = document.getElementById('strategy-analysis-container');
+    const strategyKeysList = document.getElementById('strategy-keys-list');
+    const strategyBoardCanvasWrapper = document.getElementById('strategy-board-canvas-wrapper');
+
+    // **** 新增：實力驗證 UI 元素 ****
+    const runBenchmarkBtn = document.getElementById('run-benchmark-btn');
+    const benchmarkResultContainer = document.getElementById('benchmark-result-container');
+    const benchWinsEl = document.getElementById('bench-wins');
+    const benchLossesEl = document.getElementById('bench-losses');
+    const benchDrawsEl = document.getElementById('bench-draws');
+    const benchSummaryEl = document.getElementById('bench-summary');
+
+    // **** Colab 伺服器控制元素 ****
+    const colabUrlInput = document.getElementById('colab-url-input');
+    const useCloudCheckbox = document.getElementById('use-cloud-checkbox');
+    const serverStatusHint = document.getElementById('server-status-hint');
+
+    // 分離出「遊戲中」的控制項，以便在佈局模式下禁用
+    let playControls = [
         gameModeSelect, boardSizeSelect, lineLengthSelect, 
-        startBatchButton, batchCountInput
-        // (*** 故意不包含 stopBatchButton ***)
+        startBatchButton, batchCountInput,
+        scoreAndGoCheckbox, allowShorterLinesCheckbox,
+        inputModeSelect,
+        aiP1TypeSelect, aiP2TypeSelect,
+        startPlayerSelect,
+        colabUrlInput, useCloudCheckbox,
+        customBoardPatternInput
+    ];
+    
+    // uiControls 用於 AI 思考或批次時 *全部* 禁用
+    let uiControls = [
+        ...playControls,
+        resetButton, undoButton, exportLogButton, exportPNGButton,
+        setupModeButton, 
+        openTrainingBtn 
     ];
 
+    // **** 處理雲端切換的事件監聽 ****
+    if (useCloudCheckbox && colabUrlInput) {
+        useCloudCheckbox.addEventListener('change', () => {
+            colabUrlInput.disabled = !useCloudCheckbox.checked;
+            if (useCloudCheckbox.checked) {
+                colabUrlInput.focus();
+                if (serverStatusHint) serverStatusHint.textContent = "請輸入 Colab 網址 (https://...)";
+            } else {
+                if (serverStatusHint) serverStatusHint.textContent = "已切換至本機運算 (Web Worker)";
+            }
+        });
+    }
 
     // 偵測是否為手機
     const isMobile = window.innerWidth < 768;
@@ -63,6 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 依棋盤大小產生 ROW_LENGTHS
     function computeRowLengths(size) {
         switch (size) {
+            case 'tiny':
+                return [2, 3, 2];
+            case 'small_343':
+                return [3, 4, 3];
+            case 'medium_454':
+                return [4, 5, 4];
+            case 'large_565':
+                return [5, 6, 5];
             case 'small':
                 return [3, 4, 5, 4, 3];
             case 'large':
@@ -92,16 +187,44 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedDot2 = null;
     let gameMode = 0; 
     let REQUIRED_LINE_LENGTH = 1; 
+    
+    let isScoreAndGoAgain = false;
+    let isAllowShorterLines = false;
+    
+    let inputMode = 'drag'; 
+    
+    // 佈局模式狀態
+    let isSetupMode = false;
+
+    // 拖曳畫線狀態
+    let isDrawing = false; 
 
     // 遊戲紀錄 (單場)
     let gameHistoryLog = {};
     let turnCounter = 1;
+    
+    let pngStepLog = []; 
 
-    // (新功能) 批次對戰狀態
+    // 批次對戰狀態
     let isBatchRunning = false;
-    let batchLog = []; // 儲存 (多場) gameHistoryLog
+    let batchLog = []; 
     let batchTotalGames = 0;
     let batchGamesCompleted = 0;
+    
+    // 用於儲存 `lines` 的固定順序
+    let sortedLineIds = []; 
+    
+    // 訓練模式變數
+    let isTraining = false;
+    let trainingPopulation = [];
+    let currentGeneration = 0;
+    let maxGenerations = 50;
+    let bestWeightsSoFar = null; 
+
+    // **** Undo 堆疊 ****
+    let undoStack = [];
+    const MAX_UNDO_DEPTH = 50;
+
     // ===================================
     // Web Worker 相關
     // ===================================
@@ -123,11 +246,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 isAIThinking = false; 
                 const endTime = performance.now();
                 const duration = (endTime - aiStartTime) / 1000;
-                // (新) 批次模式下不顯示 AI 紀錄，避免刷屏
                 if (!isBatchRunning) {
-                    logAI(`--- (主線程) 總耗時: ${duration.toFixed(2)} 秒 ---`);
+                    logAI(`--- (本機) 總耗時: ${duration.toFixed(2)} 秒 ---`);
                 }
                 handleAIMoveResult(data.bestMove);
+            } else if (data.type === 'training_result') {
+                handleTrainingGenerationComplete(data.population, data.bestAgentBoard);
+            } else if (data.type === 'benchmark_result') {
+                // **** 處理實力驗證結果 ****
+                handleBenchmarkResult(data.wins, data.losses, data.draws);
             }
         };
         aiWorker.onerror = (e) => {
@@ -135,7 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("AI Worker Error:", e);
             isAIThinking = false;
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
-            // (新) 如果批次對戰中 AI 崩潰，也要解鎖 UI
             if (isBatchRunning) {
                 isBatchRunning = false;
                 toggleUIControls(true);
@@ -148,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // AI 紀錄輔助函式
     function logAI(message) {
-        // (新) 批次模式下不顯示 AI 紀錄
         if (isBatchRunning) return;
         
         if (aiLogOutput) {
@@ -174,9 +299,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${d1.r},${d1.c}_${d2.r},${d2.c}`;
     }
 
+    // 更新 AI 類型選單的可見性
+    function updateAITypeVisibility() {
+        const mode = parseInt(gameModeSelect.value, 10);
+        
+        aiP1TypeGroup.classList.add('hidden');
+        aiP2TypeGroup.classList.add('hidden');
+        
+        if (mode === 1) { // P vs C
+            aiP2TypeGroup.classList.remove('hidden');
+        } else if (mode === 2) { // C vs C
+            aiP1TypeGroup.classList.remove('hidden');
+            aiP2TypeGroup.classList.remove('hidden');
+        }
+    }
+
 
     // 初始化遊戲
     function initGame() {
+        
+        if (isSetupMode) {
+            isSetupMode = false;
+            setupModeButton.textContent = '進入佈局模式';
+            setupModeButton.classList.remove('success');
+            setupModeButton.classList.add('primary');
+            togglePlayControls(true); 
+            setupActionBar.classList.add('hidden');
+        }
+
+        // **** 重置 Undo Stack ****
+        undoStack = [];
+        updateUndoButtonState();
+        
         try {
             initializeAIWorker();
         } catch (e) {
@@ -186,30 +340,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         isAIThinking = false;
         
-        // (新) 只有在 *不是* 批次模式時，才清空批次紀錄
         if (!isBatchRunning) {
             batchLog = [];
+            pngStepLog = [];
         }
-
-        // 重設 *單場* 遊戲紀錄
+        
+        isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        isAllowShorterLines = allowShorterLinesCheckbox ? allowShorterLinesCheckbox.checked : false;
+        
+        inputMode = inputModeSelect.value;
+        
+        updateAITypeVisibility();
+        
+        // 重設單場遊戲紀錄
         turnCounter = 1;
         gameHistoryLog = {
             settings: {
                 boardSize: boardSizeSelect.value,
                 lineLength: lineLengthSelect.value,
-                // (新) 如果是批次模式，強制使用 CVC 模式名稱
                 gameMode: isBatchRunning ? "電腦 V.S. 電腦" : gameModeSelect.options[gameModeSelect.selectedIndex].text,
+                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
+                aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
+                aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
+                isScoreAndGoAgain: isScoreAndGoAgain, 
+                allowShorterLines: isAllowShorterLines,
+                inputMode: inputMode, 
                 dateTime: new Date().toISOString()
             },
             turns: [],
             summary: {}
         };
 
-        // (新) 如果是批次模式，強制 gameMode = 2
         gameMode = isBatchRunning ? 2 : parseInt(gameModeSelect.value, 10);
         
+        // **** 支援自訂棋盤 ****
         const sizeValue = (boardSizeSelect && boardSizeSelect.value) ? boardSizeSelect.value : 'medium';
-        ROW_LENGTHS = computeRowLengths(sizeValue);
+        if (sizeValue === 'custom') {
+            const patternStr = customBoardPatternInput.value || "3,4,3";
+            try {
+                ROW_LENGTHS = patternStr.split(/[,，\s]+/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+                if (ROW_LENGTHS.length === 0) ROW_LENGTHS = [3, 4, 3];
+            } catch (e) {
+                console.error("解析自訂棋盤失敗", e);
+                ROW_LENGTHS = [3, 4, 3];
+            }
+        } else {
+            ROW_LENGTHS = computeRowLengths(sizeValue);
+        }
         
         const lengthValue = (lineLengthSelect && lineLengthSelect.value) ? lineLengthSelect.value : '1';
         REQUIRED_LINE_LENGTH = parseInt(lengthValue, 10);
@@ -219,7 +396,9 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = gridWidth + PADDING * 2;
         canvas.height = gridHeight + PADDING * 2;
 
-        currentPlayer = 1;
+        const startPlayerValue = startPlayerSelect.value;
+        currentPlayer = (startPlayerValue === '2') ? 2 : 1;
+        
         scores = { 1: 0, 2: 0 };
         dots = [];
         lines = {};
@@ -227,19 +406,46 @@ document.addEventListener('DOMContentLoaded', () => {
         totalTriangles = 0;
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.remove('visible'); 
+        
+        if (actionBar) actionBar.classList.remove('visible'); 
+        
         modalOverlay.classList.add('hidden'); 
         
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
-        // (新) 批次模式下 *不顯示* AI 紀錄
         if (aiLogContainer && !isBatchRunning) {
             aiLogContainer.classList.add('hidden');
         }
         clearAILog();
 
 
-        // 產生所有點的座標
+        // **** 計算 1-2-3 著色偏移量 ****
         dots = [];
+        const rowOffsets = new Array(ROW_LENGTHS.length).fill(0);
+        const midRow = Math.floor(ROW_LENGTHS.length / 2);
+        const midCol = Math.floor(ROW_LENGTHS[midRow] / 2);
+        
+        rowOffsets[midRow] = (2 - (midCol % 3) + 3) % 3;
+
+        for (let r = midRow - 1; r >= 0; r--) {
+            const lenCurr = ROW_LENGTHS[r];
+            const lenNext = ROW_LENGTHS[r+1];
+            if (lenNext > lenCurr) {
+                rowOffsets[r] = (rowOffsets[r+1] - 1 + 3) % 3;
+            } else {
+                rowOffsets[r] = (rowOffsets[r+1] - 2 + 3) % 3;
+            }
+        }
+
+        for (let r = midRow; r < ROW_LENGTHS.length - 1; r++) {
+            const lenCurr = ROW_LENGTHS[r];
+            const lenNext = ROW_LENGTHS[r+1];
+            if (lenNext > lenCurr) {
+                rowOffsets[r+1] = (rowOffsets[r] + 1) % 3;
+            } else {
+                rowOffsets[r+1] = (rowOffsets[r] + 2) % 3;
+            }
+        }
+
         ROW_LENGTHS.forEach((len, r) => {
             dots[r] = [];
             const rowWidth = (len - 1) * DOT_SPACING_X;
@@ -248,7 +454,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 dots[r][c] = {
                     x: c * DOT_SPACING_X + offsetX,
                     y: r * DOT_SPACING_Y + PADDING,
-                    r: r, c: c
+                    r: r, c: c,
+                    id: `${r},${c}`, 
+                    number: (rowOffsets[r] + c) % 3 + 1 
                 };
             }
         });
@@ -268,81 +476,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     const len2 = ROW_LENGTHS[r+1];
                     if (len2 > len1) { 
                         const d_dl = dots[r + 1][c];
-                        const id_dl = getLineId(d1, d_dl);
-                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+                        const id_dl = getLineId(d1, d2_dl); // 修正變數參考錯誤
+                        // 原代碼此處似有小 typo (d_dl 定義了但下面用了 id_dl 和 d1, d_dl)
+                        // 修正：
+                         lines[getLineId(d1, d_dl)] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: getLineId(d1, d_dl) };
                         const d_dr = dots[r + 1][c + 1];
-                        const id_dr = getLineId(d1, d_dr);
-                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                        lines[getLineId(d1, d_dr)] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: getLineId(d1, d_dr) };
                     } else { 
                         if (c < len2) { 
                             const d_dl = dots[r + 1][c];
-                            const id_dl = getLineId(d1, d_dl);
-                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+                            lines[getLineId(d1, d_dl)] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: getLineId(d1, d_dl) };
                         }
                         if (c > 0) { 
                             const d_dr = dots[r + 1][c - 1];
-                            const id_dr = getLineId(d1, d_dr);
-                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                            lines[getLineId(d1, d_dr)] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: getLineId(d1, d_dr) };
                         }
                     }
                 }
             }
         }
+        
+        sortedLineIds = Object.keys(lines).sort();
 
         // 產生所有三角形
         triangles = [];
         totalTriangles = 0;
-        for (let r = 0; r < ROW_LENGTHS.length - 1; r++) {
-            const len1 = ROW_LENGTHS[r];
-            const len2 = ROW_LENGTHS[r+1];
-            if (len2 > len1) { 
-                for (let c = 0; c < len1; c++) {
-                    const d1 = dots[r][c];
-                    const d2 = dots[r+1][c];
-                    const d3 = dots[r+1][c+1];
-                    if (d1 && d2 && d3) {
-                        triangles.push({
+        const allDots = dots.flat();
+        for (let i = 0; i < allDots.length; i++) {
+            for (let j = i + 1; j < allDots.length; j++) {
+                for (let k = j + 1; k < allDots.length; k++) {
+                    const d1 = allDots[i];
+                    const d2 = allDots[j];
+                    const d3 = allDots[k];
+                    
+                    if (isValidTriangle(d1, d2, d3)) {
+                         triangles.push({
                             lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
                             dots: [d1, d2, d3],
                             filled: false, player: 0
                         });
                         totalTriangles++;
-                    }
-                    if (c < len1 - 1) {
-                        const d4 = dots[r][c+1];
-                        if (d1 && d4 && d3) {
-                            triangles.push({
-                                lineKeys: [getLineId(d1, d4), getLineId(d1, d3), getLineId(d4, d3)],
-                                dots: [d1, d4, d3],
-                                filled: false, player: 0
-                            });
-                            totalTriangles++;
-                        }
-                    }
-                }
-            } else { 
-                for (let c = 0; c < len2; c++) {
-                    const d1 = dots[r][c];
-                    const d2 = dots[r][c+1];
-                    const d3 = dots[r+1][c];
-                    if (d1 && d2 && d3) {
-                        triangles.push({
-                            lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
-                            dots: [d1, d2, d3],
-                            filled: false, player: 0
-                        });
-                        totalTriangles++;
-                    }
-                    if (c < len2 - 1) {
-                        const d4 = dots[r+1][c+1];
-                        if(d2 && d3 && d4) {
-                            triangles.push({
-                                lineKeys: [getLineId(d2, d3), getLineId(d2, d4), getLineId(d3, d4)],
-                                dots: [d2, d3, d4],
-                                filled: false, player: 0
-                            });
-                            totalTriangles++;
-                        }
                     }
                 }
             }
@@ -351,20 +524,43 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUI();
         drawCanvas();
         
-        const isP1AI = (gameMode === 2); // (gameMode 在批次模式下會被設為 2)
-        
-        if (isP1AI) {
+        removeCanvasListeners(); 
+        if (inputMode === 'drag') {
+            bindDragListeners();
+        } else {
+            bindClickListeners();
+        }
+
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+
+        let isStartingPlayerAI = false;
+        if (currentPlayer === 1 && isP1AI) {
+            isStartingPlayerAI = true;
+        } else if (currentPlayer === 2 && isP2AI) {
+            isStartingPlayerAI = true;
+        }
+
+        if (isStartingPlayerAI) {
             triggerAIMove();
         } else {
             const allMoves = findAllValidMoves(lines);
             if (allMoves.length === 0) {
-                logAI("--- 遊戲開始，但玩家 1 已無棋可走 ---");
+                logAI(`--- 遊戲開始，但玩家 ${currentPlayer} 已無棋可走 ---`);
                 if (aiLogContainer) aiLogContainer.classList.remove('hidden');
                 endGame();
                 return;
             }
         }
     }
+    
+    function isValidTriangle(d1, d2, d3) {
+        const l1 = lines[getLineId(d1, d2)];
+        const l2 = lines[getLineId(d1, d3)];
+        const l3 = lines[getLineId(d2, d3)];
+        return l1 && l2 && l3;
+    }
+
 
     // 繪製所有遊戲元素
     function drawCanvas() {
@@ -433,9 +629,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 3. 繪製點
+        // 3. 繪製點 
         dots.forEach(row => {
             row.forEach(dot => {
+                
+                if (dot.number > 0) {
+                    ctx.fillStyle = '#2c3e50'; 
+                    ctx.font = `bold ${isMobile ? 10 : 12}px "Nunito", sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom'; 
+                    ctx.fillText(dot.number, dot.x, dot.y - DOT_RADIUS - (isMobile ? 1 : 2)); 
+                }
+
                 ctx.beginPath();
                 ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, 2 * Math.PI); 
                 ctx.fillStyle = '#34495e';
@@ -447,47 +652,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedDot1) {
             ctx.beginPath();
             ctx.arc(selectedDot1.x, selectedDot1.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.stroke();
         }
         if (selectedDot2) {
             ctx.beginPath();
             ctx.arc(selectedDot2.x, selectedDot2.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.stroke();
         }
         
-        if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
+        const isValidPreview = isSetupMode ? 
+            isValidSetupLine(selectedDot1, selectedDot2) : 
+            isValidPreviewLine(selectedDot1, selectedDot2, lines);
+
+        if (selectedDot1 && selectedDot2 && isValidPreview) {
             ctx.beginPath();
             ctx.moveTo(selectedDot1.x, selectedDot1.y);
             ctx.lineTo(selectedDot2.x, selectedDot2.y);
-            ctx.strokeStyle = PLAYER_COLORS[currentPlayer].line;
+            ctx.strokeStyle = isSetupMode ? PLAYER_COLORS[0].line : PLAYER_COLORS[currentPlayer].line;
             ctx.lineWidth = 4; 
             ctx.setLineDash([8, 4]); 
             ctx.stroke();
             ctx.setLineDash([]); 
         }
     }
-
-    // 點擊/觸控畫布
-    function handleCanvasClick(e) {
-        // (新) 批次模式下禁止點擊畫布
-        if (isBatchRunning) return;
-
-        if (isAIThinking) {
-            return;
-        }
-        const isP1AI = (gameMode === 2);
-        const isP2AI = (gameMode === 1 || gameMode === 2);
-        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
-            return;
-        }
-        if (actionBar.classList.contains('visible')) {
-            return;
-        }
-        
+    
+    // 取得滑鼠/觸控座標
+    function getMousePos(e) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
@@ -501,23 +695,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const mouseX = (clientX - rect.left) * scaleX;
         const mouseY = (clientY - rect.top) * scaleY;
-        const clickedDot = findNearestDot(mouseX, mouseY);
-        
-        if (!clickedDot) {
-            if (selectedDot1) cancelLine();
+        return { x: mouseX, y: mouseY };
+    }
+
+    // 「點擊」模式的邏輯
+    function handleCanvasClick(e) {
+        if (isSetupMode) {
+            handleSetupDotClick(e);
             return;
         }
-
+        if (isBatchRunning || isAIThinking) return;
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+            return;
+        }
+        if (actionBar && actionBar.classList.contains('visible')) {
+            return;
+        }
+        const pos = getMousePos(e);
+        const clickedDot = findNearestDot(pos.x, pos.y);
+        if (!clickedDot) {
+            if (selectedDot1) cancelLine(); 
+            return;
+        }
         if (selectedDot1 === null) {
             selectedDot1 = clickedDot;
         } 
         else if (selectedDot2 === null) {
             if (clickedDot === selectedDot1) {
-                selectedDot1 = null; 
+                cancelLine(); 
             } else {
                 if (isValidPreviewLine(selectedDot1, clickedDot, lines)) {
                     selectedDot2 = clickedDot;
-                    actionBar.classList.add('visible');
+                    if (actionBar) actionBar.classList.add('visible'); 
                 } else {
                     cancelLine();
                 }
@@ -526,44 +737,352 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
 
-    // "確認連線" 按鈕
-    function confirmLine() {
-        if (!selectedDot1 || !selectedDot2) return;
-        
-        if (!isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
-            alert(`無效連線！(必須為 ${REQUIRED_LINE_LENGTH} 格且至少包含 1 格虛線)`);
-            cancelLine();
+
+    // 滑鼠/觸控按下 (拖曳模式)
+    function handleDragStart(e) {
+        if (isSetupMode) return; 
+        if (isBatchRunning || isAIThinking) return;
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
             return;
         }
+        e.preventDefault();
+        const pos = getMousePos(e);
+        const clickedDot = findNearestDot(pos.x, pos.y);
+        if (clickedDot) {
+            isDrawing = true;
+            selectedDot1 = clickedDot;
+            selectedDot2 = null;
+            drawCanvas(); 
+        }
+    }
+    
+    // 滑鼠/觸控移動 (拖曳模式)
+    function handleDragMove(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getMousePos(e);
+        const hoverDot = findNearestDot(pos.x, pos.y);
+        if (hoverDot && hoverDot !== selectedDot1) {
+            selectedDot2 = hoverDot;
+        } else {
+            selectedDot2 = null;
+        }
+        drawCanvas();
+    }
+
+    // 滑鼠/觸控放開 (拖曳模式)
+    function handleDragEnd(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
+            confirmLine();
+        } else {
+            cancelLine();
+        }
+    }
+    
+    // 滑鼠移出畫布 (拖曳模式)
+    function handleDragLeave(e) {
+        if (isDrawing) {
+            isDrawing = false;
+            cancelLine();
+        }
+    }
+
+    // ==========================================================
+    // 佈局模式 (Setup Mode) 相關函式
+    // ==========================================================
+    
+    function togglePlayControls(isEnabled) {
+        playControls.forEach(control => {
+            if (control) {
+                control.disabled = !isEnabled;
+            }
+        });
+    }
+
+    function toggleSetupMode() {
+        isSetupMode = !isSetupMode;
+        if (isSetupMode) {
+            initGame(); 
+            isSetupMode = true; 
+            setupModeButton.textContent = '完成佈局並開始';
+            setupModeButton.classList.remove('primary');
+            setupModeButton.classList.add('success');
+            togglePlayControls(false); 
+            setupActionBar.classList.remove('hidden');
+            actionBar.classList.remove('visible'); 
+            cancelLine();
+            removeCanvasListeners();
+            bindClickListeners(); 
+        } else {
+            setupModeButton.textContent = '進入佈局模式';
+            setupModeButton.classList.remove('success');
+            setupModeButton.classList.add('primary');
+            togglePlayControls(true); 
+            setupActionBar.classList.add('hidden');
+            cancelSetupLine();
+            startGameFromLayout(); 
+        }
+    }
+
+    function handleSetupDotClick(e) {
+        const pos = getMousePos(e);
+        const clickedDot = findNearestDot(pos.x, pos.y);
+        if (!clickedDot) {
+            cancelSetupLine();
+            return;
+        }
+        if (selectedDot1 === null) {
+            selectedDot1 = clickedDot;
+        } 
+        else if (selectedDot2 === null) {
+            if (clickedDot === selectedDot1) {
+                cancelSetupLine(); 
+            } else {
+                if (isValidSetupLine(selectedDot1, clickedDot)) { 
+                    selectedDot2 = clickedDot;
+                } else {
+                    cancelSetupLine();
+                }
+            }
+        }
+        drawCanvas();
+    }
+    
+    function isValidSetupLine(dotA, dotB) {
+        if (!dotA || !dotB) return false;
+        const allDotsOnLine = findIntermediateDots(dotA, dotB);
+        const segmentIds = [];
+        for (let i = 0; i < allDotsOnLine.length - 1; i++) {
+            segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
+        }
+        if (segmentIds.length === 0) return false; 
+        return segmentIds.every(id => !!lines[id]);
+    }
+    
+    function applySetupLine(player) {
+        if (!selectedDot1 || !selectedDot2) return;
+        if (!isValidSetupLine(selectedDot1, selectedDot2)) {
+             cancelSetupLine();
+             return;
+        }
+        const allDotsOnLine = findIntermediateDots(selectedDot1, selectedDot2);
+        const segmentIds = [];
+        for (let i = 0; i < allDotsOnLine.length - 1; i++) {
+            segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
+        }
+
+        for (const id of segmentIds) {
+            if (player === 1) {
+                lines[id].drawn = true;
+                lines[id].player = 1;
+                lines[id].sharedBy = 0; 
+            } else if (player === 2) {
+                lines[id].drawn = true;
+                lines[id].player = 2;
+                lines[id].sharedBy = 0; 
+            } else { // player === 0
+                lines[id].drawn = false;
+                lines[id].player = 0;
+                lines[id].sharedBy = 0;
+            }
+        }
+        cancelSetupLine(); 
+        drawCanvas(); 
+    }
+    
+    function cancelSetupLine() {
+        selectedDot1 = null;
+        selectedDot2 = null;
+        drawCanvas();
+    }
+
+    function startGameFromLayout() {
+        removeCanvasListeners();
+        if (inputModeSelect.value === 'drag') {
+            bindDragListeners();
+        } else {
+            bindClickListeners();
+        }
+
+        scores = { 1: 0, 2: 0 };
+        let totalFilledThisGame = 0;
+        
+        triangles.forEach(tri => {
+            const isComplete = tri.lineKeys.every(key => lines[key] && lines[key].drawn);
+            if (isComplete) {
+                let p1Lines = 0;
+                let p2Lines = 0;
+                tri.lineKeys.forEach(key => {
+                    if (lines[key].player === 1) p1Lines++;
+                    if (lines[key].player === 2) p2Lines++;
+                    if (lines[key].sharedBy === 1) p1Lines++;
+                    if (lines[key].sharedBy === 2) p2Lines++;
+                });
+
+                let owner = 0;
+                if (p1Lines > p2Lines) owner = 1;
+                else if (p2Lines > p1Lines) owner = 2;
+                
+                tri.filled = true;
+                tri.player = owner;
+                if (owner !== 0) {
+                    scores[owner]++;
+                }
+                totalFilledThisGame++;
+                
+            } else {
+                tri.filled = false;
+                tri.player = 0;
+            }
+        });
+        
+        gameMode = parseInt(gameModeSelect.value, 10);
+        isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        isAllowShorterLines = allowShorterLinesCheckbox.checked;
+        inputMode = inputModeSelect.value;
+        currentPlayer = parseInt(startPlayerSelect.value, 10);
+        
+        turnCounter = 1;
+        pngStepLog = [];
+        
+        // 重置 Undo Stack
+        undoStack = [];
+        updateUndoButtonState();
+
+        gameHistoryLog = {
+            settings: {
+                boardSize: boardSizeSelect.value,
+                lineLength: lineLengthSelect.value,
+                gameMode: gameModeSelect.options[gameModeSelect.selectedIndex].text,
+                startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
+                aiTypeP1: gameMode === 2 ? aiP1TypeSelect.value : null,
+                aiTypeP2: gameMode === 1 || gameMode === 2 ? aiP2TypeSelect.value : null,
+                isScoreAndGoAgain: isScoreAndGoAgain, 
+                allowShorterLines: isAllowShorterLines,
+                inputMode: inputMode, 
+                dateTime: new Date().toISOString(),
+                startedFromLayout: true
+            },
+            turns: [
+                {
+                    turn: 0,
+                    player: "System",
+                    playerType: "Layout", 
+                    move: "從佈局開始",
+                    segmentsDrawn: [], 
+                    scoreGained: 0,
+                    trianglesCompleted: [], 
+                    newScoreP1: scores[1],
+                    newScoreP2: scores[2],
+                    stateBefore: "", 
+                    stateAfter: getBoardStateString(lines) 
+                }
+            ],
+            summary: {}
+        };
+        
+        updateAITypeVisibility();
+        updateUI();
+        drawCanvas();
+        
+        if (totalFilledThisGame === totalTriangles) {
+            logAI(`--- 從佈局開始，但遊戲已結束 ---`);
+            endGame();
+            return;
+        }
+
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        let isStartingPlayerAI = false;
+        if (currentPlayer === 1 && isP1AI) {
+            isStartingPlayerAI = true;
+        } else if (currentPlayer === 2 && isP2AI) {
+            isStartingPlayerAI = true;
+        }
+
+        if (isStartingPlayerAI) {
+            triggerAIMove();
+        } else {
+            const allMoves = findAllValidMoves(lines);
+            if (allMoves.length === 0) {
+                logAI(`--- 從佈局開始，但玩家 ${currentPlayer} 已無棋可走 ---`);
+                if (aiLogContainer) aiLogContainer.classList.remove('hidden');
+                endGame();
+                return;
+            }
+        }
+    }
+
+
+    // "確認連線"
+    function confirmLine() {
+        if (!selectedDot1 || !selectedDot2) return;
+        if (!isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
+            cancelLine(); 
+            return;
+        }
+        
+        // **** 儲存狀態 ****
+        saveGameState();
         
         const moveResult = applyMoveToBoard(selectedDot1, selectedDot2, currentPlayer);
 
         if (!moveResult.newSegmentDrawn) {
-            alert(`無效連線！您必須至少連到一格虛線。`);
             cancelLine();
+            // 如果沒畫成，因為前面多存了一次狀態，這裡可以選擇 undoLastMove() 或不處理 (下次再覆蓋)
+            // 嚴謹一點：
+            undoStack.pop(); 
+            updateUndoButtonState();
             return;
         }
 
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.remove('visible'); 
+        
+        if (inputMode === 'click' && actionBar) {
+            actionBar.classList.remove('visible');
+        }
         
         drawCanvas();
+
+        if (!isBatchRunning) {
+            const turnID = turnCounter - 1; 
+            exportCanvasAsPNG(null, turnID); 
+        }
+        
         updateUI(); 
 
         if (moveResult.gameEnded) {
             endGame();
             return;
         }
-
-        switchPlayer();
+        
+        if (moveResult.scoreGained > 0 && isScoreAndGoAgain) {
+            logAI(`--- 玩家 ${currentPlayer} 得分，再走一次 ---`);
+            const isP1AI = (gameMode === 2);
+            const isP2AI = (gameMode === 1 || gameMode === 2);
+            if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+                if (isBatchRunning) {
+                    setTimeout(triggerAIMove, 10);
+                } else {
+                    triggerAIMove();
+                }
+            }
+        } else {
+            switchPlayer();
+        }
     }
 
-    // "取消選取" 按鈕
     function cancelLine() {
         selectedDot1 = null;
         selectedDot2 = null;
-        actionBar.classList.remove('visible');
+        if (inputMode === 'click' && actionBar) {
+            actionBar.classList.remove('visible');
+        }
         drawCanvas();
     }
 
@@ -627,8 +1146,15 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
+        
+        // **** 修改：長度判斷 ****
         if (segmentIds.length === 0 && dotA !== dotB) return false;
-        if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        if (isAllowShorterLines) {
+            if (segmentIds.length < 1 || segmentIds.length > REQUIRED_LINE_LENGTH) return false;
+        } else {
+            if (segmentIds.length !== REQUIRED_LINE_LENGTH) return false; 
+        }
+
         let allSegmentsExist = true;
         let hasUndrawnSegment = false; 
         for (const id of segmentIds) {
@@ -665,7 +1191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function switchPlayer() {
         const isP1AI_current = (gameMode === 2);
         const isP2AI_current = (gameMode === 1 || gameMode === 2);
-        if (aiLogContainer && !isBatchRunning) { // (新) 批次模式下不顯示
+        if (aiLogContainer && !isBatchRunning) { 
             if ((currentPlayer === 1 && isP1AI_current) || (currentPlayer === 2 && isP2AI_current)) {
             } else {
                  aiLogContainer.classList.add('hidden');
@@ -683,7 +1209,6 @@ document.addEventListener('DOMContentLoaded', () => {
             triggerAIMove();
         } else {
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
-            
             const allMoves = findAllValidMoves(lines);
             if (allMoves.length === 0) {
                 const playerName = (currentPlayer === 1) ? "玩家 1" : "玩家 2";
@@ -699,14 +1224,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateUI() {
         score1El.textContent = scores[1];
         score2El.textContent = scores[2];
-        
         let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
         let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
-        
+        if (gameMode === 1) { 
+            player2Name = `電腦 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
+        } else if (gameMode === 2) { 
+            player1Name = `電腦 1 (${aiP1TypeSelect.options[aiP1TypeSelect.selectedIndex].text})`;
+            player2Name = `電腦 2 (${aiP2TypeSelect.options[aiP2TypeSelect.selectedIndex].text})`;
+        }
         player1ScoreBox.childNodes[0].nodeValue = `${player1Name}: `;
         player2ScoreBox.childNodes[0].nodeValue = `${player2Name}: `;
-
-
         if (currentPlayer === 1) {
             player1ScoreBox.classList.add('active');
             player2ScoreBox.classList.remove('active', 'player2');
@@ -729,11 +1256,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiWorker) aiWorker.terminate();
             isAIThinking = false;
         }
-        
-        let player1Name = (gameMode === 2) ? "電腦 1" : "玩家 1";
-        let player2Name = (gameMode === 0) ? "玩家 2" : (gameMode === 1 ? "電腦" : "電腦 2");
+        let player1Name = player1ScoreBox.childNodes[0].nodeValue.replace(': ', '');
+        let player2Name = player2ScoreBox.childNodes[0].nodeValue.replace(': ', '');
         let winnerMessage = "";
-
         if (scores[1] > scores[2]) {
             winnerMessage = `${player1Name} 獲勝！`;
         } else if (scores[2] > scores[1]) {
@@ -741,65 +1266,134 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             winnerMessage = "平手！";
         }
-        
-        // 紀錄遊戲總結
         gameHistoryLog.summary = {
             finalScoreP1: scores[1],
             finalScoreP2: scores[2],
             winnerMessage: winnerMessage
         };
-
-        // (**** 新功能 ****) 檢查是否在批次模式
         if (isBatchRunning) {
-            
-            // (**** 新功能 ****) 匯出本場遊戲的 *最終棋盤* PNG
-            // (我們傳入 gameID，以便正確命名)
-            exportCanvasAsPNG(batchGamesCompleted + 1); 
-            
-            batchLog.push(gameHistoryLog); // 儲存本場紀錄
+            exportCanvasAsPNG(batchGamesCompleted + 1, null); 
+            batchLog.push(gameHistoryLog); 
             batchGamesCompleted++;
-            
             if (batchStatusMessage) {
                 batchStatusMessage.textContent = `執行中... (已完成 ${batchGamesCompleted} / ${batchTotalGames} 場)`;
             }
-            
             if (batchGamesCompleted < batchTotalGames) {
-                // 還有下一場
-                setTimeout(initGame, 10); // 立即開始下一場
+                setTimeout(initGame, 10); 
             } else {
-                // 批次執行完畢
                 isBatchRunning = false;
-                toggleUIControls(true); // 解鎖 UI
-                startBatchButton.classList.remove('hidden'); // (新) 恢復按鈕
-                stopBatchButton.classList.add('hidden'); // (新) 隱藏按鈕
+                toggleUIControls(true); 
+                startBatchButton.classList.remove('hidden'); 
+                stopBatchButton.classList.add('hidden'); 
                 if (batchStatusMessage) {
-                    batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+PNG)。`;
+                    batchStatusMessage.textContent = `批次完成！已匯出 ${batchTotalGames} 場紀錄 (CSV+ZIP)。`;
                 }
-                exportBatchLog(); // 自動匯出 *所有* 紀錄 (CSV)
+                exportBatchLog(); 
             }
-
         } else {
-            // (**** 舊邏輯 ****) 非批次模式，正常顯示彈窗
+            if (pngStepLog.length > 0) {
+                let zipFilename = null;
+                if (gameHistoryLog.settings.startedFromLayout) {
+                    const date = new Date(gameHistoryLog.settings.dateTime);
+                    const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+                    zipFilename = `triangle_layout_steps_${timestamp}.zip`;
+                }
+                createAndDownloadZip(zipFilename);
+            }
             if (winnerText) {
                 winnerText.textContent = winnerMessage;
             } else {
                 console.error("找不到 'winner-text' 元素！");
             }
-            
             if (finalScoreText) {
                 finalScoreText.textContent = `比分: ${scores[1]} V.S. ${scores[2]}`;
             }
-            
             modalOverlay.classList.remove('hidden'); 
-            actionBar.classList.remove('visible'); 
-
+            if (actionBar) actionBar.classList.remove('visible'); 
             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
             if (aiLogContainer) aiLogContainer.classList.add('hidden');
         }
     }
 
+    // ===================================
+    // **** Undo 相關函式 (已修正) ****
+    // ===================================
+    function saveGameState() {
+        const stateSnapshot = {
+            lines: JSON.parse(JSON.stringify(lines)),
+            triangles: JSON.parse(JSON.stringify(triangles)),
+            scores: { ...scores },
+            currentPlayer: currentPlayer,
+            turnCounter: turnCounter,
+            gameHistoryLog: JSON.parse(JSON.stringify(gameHistoryLog)),
+            pngStepLogLength: pngStepLog.length 
+        };
+    
+        undoStack.push(stateSnapshot);
+        
+        if (undoStack.length > MAX_UNDO_DEPTH) {
+            undoStack.shift(); 
+        }
+        
+        updateUndoButtonState();
+    }
 
+    function undoLastMove() {
+        // [修正] 移除對 isAIThinking 的檢查，允許使用者中斷 AI
+        if (isBatchRunning || undoStack.length === 0) return;
+
+        // [新增] 如果 AI 正在思考，強制終止並重啟 Worker
+        if (isAIThinking) {
+             initializeAIWorker(); // 重啟 Worker 以清除當前狀態
+             isAIThinking = false;
+             if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
+             logAI("--- AI 思考已被使用者中斷 (Undo) ---");
+        }
+    
+        const prevState = undoStack.pop();
+    
+        lines = prevState.lines;
+        triangles = prevState.triangles;
+        scores = prevState.scores;
+        currentPlayer = prevState.currentPlayer;
+        turnCounter = prevState.turnCounter;
+        gameHistoryLog = prevState.gameHistoryLog;
+        
+        if (pngStepLog.length > prevState.pngStepLogLength) {
+            pngStepLog.length = prevState.pngStepLogLength; 
+        }
+    
+        selectedDot1 = null;
+        selectedDot2 = null;
+        if (actionBar) actionBar.classList.remove('visible');
+        
+        if (modalOverlay) modalOverlay.classList.add('hidden');
+        if (aiLogContainer) {
+             logAI(`--- ⏪ 玩家執行了回復上一步 ---`);
+             logAI(`--- 當前輪到: ${currentPlayer === 1 ? '玩家 1' : '玩家 2'} ---`);
+        }
+    
+        updateUI();
+        drawCanvas();
+        updateUndoButtonState();
+
+        // [修正] 移除了自動觸發 AI 的邏輯
+        // 這樣在 CvC 模式下，Undo 後會暫停，讓使用者可以檢視狀態。
+        // 若需繼續，使用者可以切換遊戲模式或點擊其他 UI 觸發。
+    }
+    
+    function updateUndoButtonState() {
+        if (undoButton) {
+            // [修正] 不再因為 isAIThinking 而停用按鈕，允許使用者中斷
+            undoButton.disabled = (undoStack.length === 0 || isBatchRunning);
+            undoButton.style.opacity = undoButton.disabled ? "0.5" : "1";
+        }
+    }
+
+
+    // ===================================
     // ----- AI 相關功能 (主線程) -----
+    // ===================================
     
     let aiStartTime = 0; 
     
@@ -816,41 +1410,136 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         isAIThinking = true;
-        if (aiThinkingMessage && !isBatchRunning) aiThinkingMessage.classList.remove('hidden'); // (新) 批次模式下不顯示
-        if (aiLogContainer && !isBatchRunning) aiLogContainer.classList.remove('hidden'); // (新) 批次模式下不顯示
+        updateUndoButtonState();
+
+        if (aiThinkingMessage && !isBatchRunning) aiThinkingMessage.classList.remove('hidden');
+        if (aiLogContainer && !isBatchRunning) aiLogContainer.classList.remove('hidden');
         
-        logAI(`--- [主線程] 傳送遊戲狀態到 Worker ---`);
         aiStartTime = performance.now();
         
-        aiWorker.postMessage({
+        let aiType = 'minimax'; 
+        if (currentPlayer === 1 && gameMode === 2) {
+            aiType = aiP1TypeSelect.value;
+        } else if (currentPlayer === 2 && (gameMode === 1 || gameMode === 2)) {
+            aiType = aiP2TypeSelect.value;
+        }
+        
+        let weightsToSend = null;
+        if (aiType === 'trained' && bestWeightsSoFar) {
+            weightsToSend = bestWeightsSoFar;
+        }
+        
+        const payload = {
             command: 'start',
+            aiType: aiType, 
+            weights: weightsToSend, 
             gameState: {
                 dots: dots,
                 lines: lines,
                 triangles: triangles,
                 player: currentPlayer,
                 totalTriangles: totalTriangles,
-                requiredLineLength: REQUIRED_LINE_LENGTH
+                requiredLineLength: REQUIRED_LINE_LENGTH,
+                isScoreAndGoAgain: isScoreAndGoAgain,
+                allowShorterLines: isAllowShorterLines // **** 傳送規則 ****
             }
-        });
+        };
+
+        const isCloudEnabled = useCloudCheckbox && useCloudCheckbox.checked;
+        const colabUrl = colabUrlInput ? colabUrlInput.value.trim() : "";
+
+        if (isCloudEnabled) {
+            if (!colabUrl || !colabUrl.startsWith("http")) {
+                alert("❌ 錯誤：您已啟用雲端運算，但尚未輸入有效的 Ngrok 網址。\n請輸入網址或取消勾選以使用本機運算。");
+                logAI("--- [中斷] 未輸入有效的雲端網址 ---");
+                resetAIState();
+                return;
+            }
+
+            logAI(`--- [雲端] 連線至 Colab 運算中... ---`);
+            
+            const apiUrl = colabUrl.replace(/\/$/, "") + "/get_move";
+
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                const endTime = performance.now();
+                const duration = (endTime - aiStartTime) / 1000;
+                if (!isBatchRunning) {
+                    logAI(`--- (雲端) 運算耗時: ${duration.toFixed(2)} 秒 ---`);
+                }
+                isAIThinking = false;
+                handleAIMoveResult(data.bestMove);
+            })
+            .catch(error => {
+                console.error('Colab Fetch Error:', error);
+                logAI(`--- [錯誤] 連線失敗 (${error.message}) ---`);
+                alert(`❌ 雲端連線失敗！\n錯誤訊息: ${error.message}\n\n請檢查 Colab 是否正在執行，或網址是否正確。\n若要使用本機運算，請取消勾選「啟用雲端加速」。`);
+                resetAIState();
+            });
+
+        } else {
+            logAI(`--- [本機] 使用瀏覽器 Worker 運算 ---`);
+            useLocalWorker(payload);
+        }
+    }
+    
+    function resetAIState() {
+        isAIThinking = false;
+        updateUndoButtonState();
+        if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
+        if (isBatchRunning) {
+            stopBatchRun();
+            if (batchStatusMessage) batchStatusMessage.textContent = "批次對戰因雲端連線錯誤已終止。";
+        }
+    }
+
+    function useLocalWorker(payload) {
+        if (!aiWorker) {
+            console.error("AI Worker 尚未初始化");
+            isAIThinking = false;
+            return;
+        }
+        aiWorker.postMessage(payload);
     }
 
     function handleAIMoveResult(bestMove) {
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
 
         if (bestMove && bestMove.dot1 && bestMove.dot2) {
+            
+            // **** 儲存狀態 ****
+            saveGameState();
+            
             const dotA = dots[bestMove.dot1.r][bestMove.dot1.c];
             const dotB = dots[bestMove.dot2.r][bestMove.dot2.c];
-
             const moveResult = applyMoveToBoard(dotA, dotB, currentPlayer);
 
             if (!moveResult.newSegmentDrawn) {
-                logAI(`--- [錯誤] AI 傳回無效移動 ---`);
+                logAI(`--- [錯誤] AI 傳回無效移動 (已重複或違規) ---`);
+                // 回復 stack
+                undoStack.pop();
+                updateUndoButtonState();
                 switchPlayer();
                 return;
             }
             
             drawCanvas();
+            const gameID = isBatchRunning ? (batchGamesCompleted + 1) : null;
+            const turnID = turnCounter - 1; 
+            exportCanvasAsPNG(gameID, turnID);
             updateUI(); 
 
             if (moveResult.gameEnded) {
@@ -858,7 +1547,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            switchPlayer();
+            if (moveResult.scoreGained > 0 && isScoreAndGoAgain) {
+                logAI(`--- 電腦 ${currentPlayer} 得分，再走一次 ---`);
+                if (isBatchRunning) {
+                    setTimeout(triggerAIMove, 10);
+                } else {
+                    triggerAIMove();
+                }
+            } else {
+                switchPlayer();
+            }
 
         } else {
             logAI(`--- [主線程] AI 未傳回走法，遊戲結束 ---`);
@@ -866,19 +1564,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    /**
-     * 將移動應用於棋盤 (人類和 AI 共用)
-     * (此處紀錄完整日誌)
-     */
+    function getBoardStateString(currentLines) {
+        if (!sortedLineIds || sortedLineIds.length === 0) {
+            console.error("sortedLineIds 尚未初始化！");
+            return "";
+        }
+        const stateChars = sortedLineIds.map(id => {
+            const line = currentLines[id];
+            if (!line || !line.drawn) {
+                return '0'; 
+            }
+            if (line.player === 1) {
+                return (line.sharedBy === 2) ? '3' : '1';
+            }
+            if (line.player === 2) {
+                return (line.sharedBy === 1) ? '4' : '2';
+            }
+            return '0'; 
+        });
+        return stateChars.join('');
+    }
+
+
     function applyMoveToBoard(dotA, dotB, player) {
+        
+        const stateBefore = getBoardStateString(lines);
+
         const allDotsOnLine = findIntermediateDots(dotA, dotB);
         const segmentIds = [];
         for (let i = 0; i < allDotsOnLine.length - 1; i++) {
             segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
         }
         
-        let newSegmentDrawn = false; 
+        let hasNewSegment = false;
+        for (const id of segmentIds) {
+            if (lines[id] && !lines[id].drawn) {
+                hasNewSegment = true;
+                break;
+            }
+        }
+        
+        if (!hasNewSegment) {
+            return { newSegmentDrawn: false, gameEnded: false, scoreGained: 0 };
+        }
 
+        let newSegmentDrawn = false; 
         for (const id of segmentIds) {
             if (lines[id]) { 
                 if (!lines[id].drawn) { 
@@ -894,13 +1624,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!newSegmentDrawn) {
-            return { newSegmentDrawn: false, gameEnded: false };
+            return { newSegmentDrawn: false, gameEnded: false, scoreGained: 0 };
         }
 
-        // 紀錄得分詳情
         const scoreBefore = scores[player];
         let totalFilledThisGame = 0;
-        let completedTrianglesInfo = []; // 儲存完成的三角形資訊
+        let completedTrianglesInfo = []; 
 
         triangles.forEach(tri => {
             if (!tri.filled) {
@@ -910,7 +1639,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     tri.player = player;
                     scores[player]++;
                     
-                    // 紀錄完成的三角形
                     const triDots = tri.dots.map(d => `(${d.r},${d.c})`).join(' | ');
                     completedTrianglesInfo.push({
                         dots: triDots,
@@ -927,16 +1655,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tri.filled) totalFilledThisGame++;
         });
 
-        // 儲存本輪紀錄
+        const stateAfter = getBoardStateString(lines);
+
         const scoreAfter = scores[player];
         const scoreGained = scoreAfter - scoreBefore;
         
-        // 判斷玩家類型
         let playerType = "Human";
-        if (gameMode === 2) { // 電腦 vs 電腦
-            playerType = "AI";
-        } else if (gameMode === 1 && player === 2) { // 玩家 vs 電腦 (P2是AI)
-            playerType = "AI";
+        if (gameMode === 2) { 
+            playerType = `AI (${player === 1 ? aiP1TypeSelect.value : aiP2TypeSelect.value})`; 
+        } else if (gameMode === 1 && player === 2) { 
+            playerType = `AI (${aiP2TypeSelect.value})`; 
         }
         
         const logEntry = {
@@ -948,18 +1676,20 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreGained: scoreGained,
             trianglesCompleted: completedTrianglesInfo, 
             newScoreP1: scores[1],
-            newScoreP2: scores[2]
+            newScoreP2: scores[2],
+            stateBefore: stateBefore, 
+            stateAfter: stateAfter
         };
-        gameHistoryLog.turns.push(logEntry); // 存入 turns 陣列
-        turnCounter++; // 移至下一輪
+        gameHistoryLog.turns.push(logEntry); 
+        turnCounter++; 
         
         return {
             newSegmentDrawn: true,
-            gameEnded: (totalFilledThisGame === totalTriangles)
+            gameEnded: (totalFilledThisGame === totalTriangles),
+            scoreGained: scoreGained 
         };
     }
     
-    // (輔助函式：安全地處理 CSV 字串)
     function escapeCSV(str) {
         if (str === null || str === undefined) return '';
         let result = String(str);
@@ -970,179 +1700,168 @@ document.addEventListener('DOMContentLoaded', () => {
         return result;
     }
 
-    // (新功能) 啟用/禁用所有 UI 控制項
     function toggleUIControls(isEnabled) {
         uiControls.forEach(control => {
             if (control) {
                 control.disabled = !isEnabled;
             }
         });
+        updateUndoButtonState();
     }
 
-    // (新功能) 開始批次對戰
     function startBatchRun() {
         const gameCount = parseInt(batchCountInput.value, 10);
         if (isNaN(gameCount) || gameCount <= 0) {
             alert("請輸入有效的對戰次數 (大於 0)。");
             return;
         }
-
+        if (isSetupMode) {
+            alert("請先完成或退出佈局模式，再開始批次對戰。");
+            return;
+        }
         isBatchRunning = true;
+        pngStepLog = [];
         batchLog = [];
         batchTotalGames = gameCount;
         batchGamesCompleted = 0;
-
-        // 鎖定 UI
         toggleUIControls(false);
-        // (新) 切換按鈕
         startBatchButton.classList.add('hidden');
         stopBatchButton.classList.remove('hidden');
-        
         batchStatusMessage.textContent = `執行中... (已完成 0 / ${batchTotalGames} 場)`;
-
-        // 強制設定為 CVC 模式 (Value "2")
         gameModeSelect.value = "2";
-
-        // 開始第一場
+        updateAITypeVisibility(); 
         initGame();
     }
     
-    // **** (新功能) 終止批次對戰 ****
     function stopBatchRun() {
-        if (!isBatchRunning) return; // 如果不在執行中，則不動作
-
+        if (!isBatchRunning) return; 
         if (confirm("您確定要終止批次對戰嗎？目前已完成的紀錄將會匯出。")) {
             isBatchRunning = false;
-            
-            // 終止 AI
             if (isAIThinking) {
                 aiWorker.terminate();
                 isAIThinking = false;
             }
-
-            // 解鎖 UI
             toggleUIControls(true);
             startBatchButton.classList.remove('hidden');
             stopBatchButton.classList.add('hidden');
-            
             if (batchStatusMessage) {
                 batchStatusMessage.textContent = `批次已手動終止 (完成 ${batchGamesCompleted} 場)。`;
             }
-
-            // 匯出目前已有的紀錄
-            if (batchLog.length > 0) {
-                exportBatchLog();
-            }
+            exportBatchLog();
         }
     }
 
-    // (新功能) 匯出 *批次* 遊戲紀錄 (多場合併)
     function exportBatchLog() {
-        if (!batchLog || batchLog.length === 0) {
-            alert("沒有可匯出的批次紀錄。");
-            return;
-        }
-
-        // CSV 標頭
-        const headers = [
-            "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
-            "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
-            "P1_TotalScore", "P2_TotalScore"
-        ];
-        
-        let csvContent = "\uFEFF"; // BOM
-
-        // 迴圈處理多場遊戲
-        batchLog.forEach((gameLog, gameIndex) => {
-            const gameID = gameIndex + 1;
-            
-            // 加入遊戲設定 (作為註解)
-            csvContent += `# 遊戲 ID: ${gameID}\n`;
-            csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
-            csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
-            csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`; 
-            csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
-
-            // 加入表格標頭
-            csvContent += headers.join(",") + "\n";
-
-            // 加入每一輪的數據
-            gameLog.turns.forEach(entry => {
-                const segmentsStr = entry.segmentsDrawn.join('; ');
-                const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
-
-                const row = [
-                    gameID, 
-                    entry.turn,
-                    entry.player,
-                    escapeCSV(entry.playerType),
-                    escapeCSV(entry.move),
-                    escapeCSV(segmentsStr), 
-                    entry.scoreGained,
-                    escapeCSV(trianglesStr), 
-                    entry.newScoreP1,
-                    entry.newScoreP2
-                ];
-                csvContent += row.join(",") + "\n";
-            });
-
-            // 加入遊戲總結 (作為註解)
-            if (gameLog.summary.winnerMessage) {
-                csvContent += "\n# 遊戲總結 (Game " + gameID + ")\n";
-                csvContent += `# 勝利訊息: ${escapeCSV(gameLog.summary.winnerMessage)}\n`;
-                csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
-                csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
-            }
-            csvContent += "\n"; 
-        });
-
-
-        // 建立 Blob 並觸發下載
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-
-        // 產生檔案名稱
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-        // (新檔名)
-        link.setAttribute("download", `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`);
-        
-        document.body.appendChild(link); 
-        link.click(); 
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+
+        if (!batchLog || batchLog.length === 0) {
+            console.warn("沒有可匯出的批次 CSV 紀錄。");
+        } else {
+            const headers = [
+                "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
+                "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
+                "P1_TotalScore", "P2_TotalScore",
+                "BoardState_Before", "BoardState_After" 
+            ];
+            
+            let csvContent = "\uFEFF"; 
+
+            batchLog.forEach((gameLog, gameIndex) => {
+                const gameID = gameIndex + 1;
+                
+                csvContent += `# 遊戲 ID: ${gameID}\n`;
+                csvContent += `# 棋盤大小: ${gameLog.settings.boardSize}\n`;
+                csvContent += `# 連線格數: ${gameLog.settings.lineLength}\n`;
+                csvContent += `# 遊戲模式: ${escapeCSV(gameLog.settings.gameMode)}\n`;
+                csvContent += `# 先手玩家: ${escapeCSV(gameLog.settings.startPlayer)}\n`; 
+                if (gameLog.settings.aiTypeP1) {
+                    csvContent += `# AI (P1) 類型: ${gameLog.settings.aiTypeP1}\n`;
+                }
+                if (gameLog.settings.aiTypeP2) {
+                    csvContent += `# AI (P2) 類型: ${gameLog.settings.aiTypeP2}\n`;
+                }
+                csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
+                csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
+
+                csvContent += headers.join(",") + "\n";
+
+                gameLog.turns.forEach(entry => {
+                    const segmentsStr = entry.segmentsDrawn.join('; ');
+                    const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
+
+                    const row = [
+                        gameID, 
+                        entry.turn,
+                        entry.player,
+                        escapeCSV(entry.playerType),
+                        escapeCSV(entry.move),
+                        escapeCSV(segmentsStr), 
+                        entry.scoreGained,
+                        escapeCSV(trianglesStr), 
+                        entry.newScoreP1,
+                        entry.newScoreP2,
+                        escapeCSV(entry.stateBefore), 
+                        escapeCSV(entry.stateAfter)
+                    ];
+                    csvContent += row.join(",") + "\n";
+                });
+
+                if (gameLog.summary.winnerMessage) {
+                    csvContent += "\n# 遊戲總結 (Game " + gameID + ")\n";
+                    csvContent += `# 勝利訊息: ${escapeCSV(gameLog.summary.winnerMessage)}\n`;
+                    csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
+                    csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
+                }
+                csvContent += "\n"; 
+            });
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const filename = `triangle_batch_log_${batchLog.length}_games_${timestamp}.csv`;
+            triggerDownload(blob, filename);
+        }
+        if (pngStepLog.length === 0) {
+            console.warn("沒有可匯出的批次 PNG 紀錄。");
+        } else {
+            const zipFilename = `triangle_batch_steps_${batchLog.length}_games_${timestamp}.zip`;
+            createAndDownloadZip(zipFilename); 
+        }
     }
 
 
-    // 匯出 *單場* 遊戲紀錄 (CSV/Excel)
     function exportGameLog() {
         if (!gameHistoryLog.turns || gameHistoryLog.turns.length === 0) {
             alert("尚未有任何遊戲紀錄 (目前這場)。");
             return;
         }
-
-        // CSV 標頭
         const headers = [
             "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
-            "P1_TotalScore", "P2_TotalScore"
+            "P1_TotalScore", "P2_TotalScore",
+            "BoardState_Before", "BoardState_After" 
         ];
         
         let csvContent = "\uFEFF"; 
 
-        // 加入遊戲設定 (作為註解)
         csvContent += "# 遊戲設定\n";
         csvContent += `# 棋盤大小: ${gameHistoryLog.settings.boardSize}\n`;
         csvContent += `# 連線格數: ${gameHistoryLog.settings.lineLength}\n`;
-        csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`; 
+        csvContent += `# 遊戲模式: ${escapeCSV(gameHistoryLog.settings.gameMode)}\n`;
+        csvContent += `# 先手玩家: ${escapeCSV(gameHistoryLog.settings.startPlayer)}\n`; 
+        if (gameHistoryLog.settings.aiTypeP1) {
+            csvContent += `# AI (P1) 類型: ${gameHistoryLog.settings.aiTypeP1}\n`;
+        }
+        if (gameHistoryLog.settings.aiTypeP2) {
+            csvContent += `# AI (P2) 類型: ${gameHistoryLog.settings.aiTypeP2}\n`;
+        }
+        csvContent += `# 得分後再走一步: ${gameHistoryLog.settings.isScoreAndGoAgain}\n`;
+        if (gameHistoryLog.settings.startedFromLayout) {
+             csvContent += `# 狀態: 從佈局開始\n`;
+        }
         csvContent += `# 紀錄時間: ${gameHistoryLog.settings.dateTime}\n\n`;
 
-        // 加入表格標頭
         csvContent += headers.join(",") + "\n";
 
-        // 加入每一輪的數據
         gameHistoryLog.turns.forEach(entry => {
             const segmentsStr = entry.segmentsDrawn.join('; ');
             const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
@@ -1156,12 +1875,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 entry.scoreGained,
                 escapeCSV(trianglesStr), 
                 entry.newScoreP1,
-                entry.newScoreP2
+                entry.newScoreP2,
+                escapeCSV(entry.stateBefore),
+                escapeCSV(entry.stateAfter)
             ];
             csvContent += row.join(",") + "\n";
         });
 
-        // 加入遊戲總結 (作為註解)
         if (gameHistoryLog.summary.winnerMessage) {
             csvContent += "\n# 遊戲總結\n";
             csvContent += `# 勝利訊息: ${escapeCSV(gameHistoryLog.summary.winnerMessage)}\n`;
@@ -1169,100 +1889,234 @@ document.addEventListener('DOMContentLoaded', () => {
             csvContent += `# P2 最終分數: ${gameHistoryLog.summary.finalScoreP2}\n`;
         }
 
-        // 建立 Blob 並觸發下載
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-
-        // 產生檔案名稱
         const date = new Date(gameHistoryLog.settings.dateTime);
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-        link.setAttribute("download", `triangle_game_log_${timestamp}.csv`);
         
+        const filenamePrefix = gameHistoryLog.settings.startedFromLayout ? "triangle_layout_log_" : "triangle_game_log_";
+        const filename = `${filenamePrefix}${timestamp}.csv`;
+        
+        triggerDownload(blob, filename);
+    }
+    
+    function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
         document.body.appendChild(link); 
         link.click(); 
-        
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }
+
+    function createAndDownloadZip(customFilename = null) {
+        if (typeof JSZip === 'undefined') {
+            console.error("JSZip 函式庫未載入！");
+            alert("錯誤：無法建立 ZIP 檔案，JSZip 函式庫遺失。");
+            return;
+        }
+        if (pngStepLog.length === 0) {
+            console.log("沒有 PNG 步驟可供壓縮。");
+            return;
+        }
+
+        const zip = new JSZip();
+        
+        if (gameHistoryLog.settings.startedFromLayout && turnCounter > 0) {
+        }
+
+        pngStepLog.forEach(entry => {
+            const base64Data = entry.data.split(',')[1];
+            zip.file(entry.filename, base64Data, { base64: true });
+        });
+
+        zip.generateAsync({ type: "blob" })
+            .then(function(blob) {
+                let filename = "";
+                if (customFilename) {
+                    filename = customFilename;
+                } else {
+                    const date = new Date();
+                    const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+                    filename = `triangle_steps_${timestamp}.zip`;
+                }
+                triggerDownload(blob, filename);
+            });
+    }
+
     
-    // (新功能) 匯出棋盤為 PNG (可選傳入 gameID)
-    function exportCanvasAsPNG(gameID = null) {
+    function exportCanvasAsPNG(gameID = null, turnID = null) {
         if (!canvas) {
             alert("找不到畫布！");
             return;
         }
 
-        // 1. 建立一個暫時的 (off-screen) 畫布
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
-        
-        // 2. 設定暫時畫布的大小
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-
-        // 3. 繪製背景色 (CSS 預設的 --color-surface 是 #ffffff)
         tempCtx.fillStyle = '#ffffff'; 
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-        // 4. 將目前的遊戲畫布 (canvas) 繪製到暫時畫布上
         tempCtx.drawImage(canvas, 0, 0);
 
-        // 5. 建立下載連結
-        const link = document.createElement('a');
-        
-        // 6. 產生帶有日期的檔案名稱
         const date = new Date();
         const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-        
-        // (新) 根據是否有 gameID 決定檔名
-        if (gameID !== null) {
-            const gameIdStr = String(gameID).padStart(2, '0'); // 格式化為 01, 02...
-            link.download = `triangle_batch_board_game_${gameIdStr}_${timestamp}.png`;
-        } else {
-            link.download = `triangle_board_${timestamp}.png`;
+        let filename = "";
+
+
+        if (turnID === null && gameID === null) {
+            const prefix = isSetupMode ? "triangle_layout_" : "triangle_board_";
+            filename = `${prefix}${timestamp}.png`;
+            tempCanvas.toBlob(function(blob) {
+                triggerDownload(blob, filename);
+            });
+
+        } else if (turnID !== null) {
+            const turnIdStr = String(turnID).padStart(3, '0');
+            if (isBatchRunning) {
+                const gameIdStr = String(gameID).padStart(3, '0');
+                filename = `Game_${gameIdStr}_Turn_${turnIdStr}.png`;
+            } else {
+                const prefix = gameHistoryLog.settings.startedFromLayout ? "Layout_Turn_" : "Turn_";
+                filename = `triangle_board_${prefix}${turnIdStr}.png`;
+            }
+            const dataURL = tempCanvas.toDataURL('image/png');
+            pngStepLog.push({ filename: filename, data: dataURL });
+
+        } else if (isBatchRunning && turnID === null) {
+            const gameIdStr = String(gameID).padStart(3, '0');
+            filename = `Game_${gameIdStr}_FINAL_Board.png`;
+            const dataURL = tempCanvas.toDataURL('image/png');
+            pngStepLog.push({ filename: filename, data: dataURL });
         }
-
-
-        // 7. 將 *暫時畫布* 的內容轉換為 PNG 數據
-        link.href = tempCanvas.toDataURL('image/png');
-
-        // 8. 觸發下載並清理
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     }
 
     // ----------------------------
     
-    // 綁定所有事件
-    canvas.addEventListener('click', handleCanvasClick);
-    canvas.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        handleCanvasClick(e);
-    });
+    function removeCanvasListeners() {
+        canvas.removeEventListener('mousedown', handleDragStart);
+        canvas.removeEventListener('mousemove', handleDragMove);
+        canvas.removeEventListener('mouseup', handleDragEnd);
+        canvas.removeEventListener('mouseleave', handleDragLeave);
+        canvas.removeEventListener('touchstart', handleDragStart);
+        canvas.removeEventListener('touchmove', handleDragMove);
+        canvas.removeEventListener('touchend', handleDragEnd);
+        canvas.removeEventListener('click', handleCanvasClick); 
+    }
 
+    function bindDragListeners() {
+        canvas.addEventListener('mousedown', handleDragStart);
+        canvas.addEventListener('mousemove', handleDragMove);
+        canvas.addEventListener('mouseup', handleDragEnd);
+        canvas.addEventListener('mouseleave', handleDragLeave);
+        canvas.addEventListener('touchstart', handleDragStart, { passive: false });
+        canvas.addEventListener('touchmove', handleDragMove, { passive: false });
+        canvas.addEventListener('touchend', handleDragEnd);
+    }
+
+    function bindClickListeners() {
+        canvas.addEventListener('click', handleCanvasClick);
+    }
+
+    
     resetButton.addEventListener('click', initGame);
     resetButtonModal.addEventListener('click', initGame);
-    confirmLineButton.addEventListener('click', confirmLine);
-    cancelLineButton.addEventListener('click', cancelLine);
+    if (undoButton) undoButton.addEventListener('click', undoLastMove);
     
-    if (gameModeSelect) gameModeSelect.addEventListener('change', initGame);
-    if (boardSizeSelect) boardSizeSelect.addEventListener('change', initGame);
-    if (lineLengthSelect) lineLengthSelect.addEventListener('change', initGame);
+    if (confirmLineButton) confirmLineButton.addEventListener('click', confirmLine);
+    if (cancelLineButton) cancelLineButton.addEventListener('click', cancelLine);
     
-    // 綁定主控制面板的匯出按鈕 (單場)
+    if (setupModeButton) setupModeButton.addEventListener('click', toggleSetupMode);
+    if (setupP1Button) setupP1Button.addEventListener('click', () => applySetupLine(1));
+    if (setupP2Button) setupP2Button.addEventListener('click', () => applySetupLine(2));
+    if (setupClearButton) setupClearButton.addEventListener('click', () => applySetupLine(0));
+    
+    // --- 關鍵修改：事件監聽器 ---
+    // 移除不必要的 initGame 呼叫，只更新變數。
+
+    // 1. 遊戲模式: 更新變數, 更新 UI, 檢查是否觸發 AI
+    if (gameModeSelect) {
+        gameModeSelect.addEventListener('change', () => {
+            gameMode = parseInt(gameModeSelect.value, 10);
+            updateAITypeVisibility();
+            updateUI();
+            
+            // 檢查是否需要觸發 AI
+            const isP1AI = (gameMode === 2);
+            const isP2AI = (gameMode === 1 || gameMode === 2);
+            if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+                if (!isAIThinking && !isBatchRunning) {
+                    triggerAIMove();
+                }
+            }
+        });
+    }
+
+    // 2. 棋盤大小: 這一定需要重置，因為結構變了
+    if (boardSizeSelect) {
+        boardSizeSelect.addEventListener('change', () => {
+            if (boardSizeSelect.value === 'custom') {
+                customBoardInputGroup.classList.remove('hidden');
+            } else {
+                customBoardInputGroup.classList.add('hidden');
+            }
+            initGame();
+        });
+    }
+    if (customBoardPatternInput) {
+        customBoardPatternInput.addEventListener('change', initGame);
+    }
+
+    // 3. 規則與其他設定: 僅更新變數
+    if (scoreAndGoCheckbox) {
+        scoreAndGoCheckbox.addEventListener('change', () => {
+            isScoreAndGoAgain = scoreAndGoCheckbox.checked;
+        });
+    }
+    
+    if (allowShorterLinesCheckbox) {
+        allowShorterLinesCheckbox.addEventListener('change', () => {
+            isAllowShorterLines = allowShorterLinesCheckbox.checked;
+        });
+    }
+
+    if (lineLengthSelect) {
+        lineLengthSelect.addEventListener('change', initGame); // 連線格數改變，重置較安全
+    }
+
+    if (startPlayerSelect) {
+        startPlayerSelect.addEventListener('change', () => {
+             // 如果在遊戲一開始，更新當前玩家
+             if (turnCounter === 1 && !isBatchRunning && !isAIThinking) {
+                 currentPlayer = parseInt(startPlayerSelect.value, 10);
+                 updateUI();
+             }
+        });
+    }
+
+    if (inputModeSelect) {
+        inputModeSelect.addEventListener('change', () => {
+            inputMode = inputModeSelect.value;
+            // 重新綁定監聽器
+            removeCanvasListeners(); 
+            if (inputMode === 'drag') bindDragListeners();
+            else bindClickListeners();
+        });
+    }
+
+    if (aiP1TypeSelect) {
+        aiP1TypeSelect.addEventListener('change', updateUI);
+    }
+    if (aiP2TypeSelect) {
+        aiP2TypeSelect.addEventListener('change', updateUI);
+    }
+
+
     if (exportLogButton) exportLogButton.addEventListener('click', exportGameLog);
-
-    // 綁定彈窗內的匯出按鈕 (單場)
     if (exportLogButtonModal) exportLogButtonModal.addEventListener('click', exportGameLog);
-    
-    // 綁定 PNG 匯出按鈕 (手動)
-    if (exportPNGButton) exportPNGButton.addEventListener('click', () => exportCanvasAsPNG(null)); // (新) 傳入 null
-    if (exportPNGButtonModal) exportPNGButtonModal.addEventListener('click', () => exportCanvasAsPNG(null)); // (新) 傳入 null
-
-    // (新功能) 點擊彈窗背景以關閉
+    if (exportPNGButton) exportPNGButton.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
+    if (exportPNGButtonModal) exportPNGButtonModal.addEventListener('click', () => exportCanvasAsPNG(null, null)); 
     if (modalOverlay) {
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
@@ -1270,16 +2124,349 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    if (startBatchButton) startBatchButton.addEventListener('click', startBatchRun);
+    if (stopBatchButton) stopBatchButton.addEventListener('click', stopBatchRun);
 
-    // (新功能) 綁定批次對戰按鈕
-    if (startBatchButton) {
-        startBatchButton.addEventListener('click', startBatchRun);
-    }
-    // **** (新功能) 綁定終止按鈕 ****
-    if (stopBatchButton) {
-        stopBatchButton.addEventListener('click', stopBatchRun);
+
+    // ===================================
+    // **** 機器訓練邏輯 (Genetic Algorithm) ****
+    // ===================================
+
+    openTrainingBtn.addEventListener('click', () => {
+        trainingPanel.classList.remove('hidden');
+        if (strategyAnalysisContainer) strategyAnalysisContainer.classList.remove('hidden'); 
+        if (boardSizeSelect.value !== 'tiny') {
+            if(confirm("建議切換到「最小」棋盤以大幅提升訓練速度。是否切換？")) {
+                boardSizeSelect.value = 'tiny';
+                initGame(); 
+            }
+        }
+    });
+    
+    closeTrainingBtn.addEventListener('click', () => {
+        if (isTraining) {
+            if(!confirm("訓練正在進行中，確定要離開嗎？(訓練將會停止)")) return;
+            stopTraining();
+        }
+        trainingPanel.classList.add('hidden');
+    });
+
+    startTrainingBtn.addEventListener('click', startTraining);
+    stopTrainingBtn.addEventListener('click', stopTraining);
+    
+    applyWeightsBtn.addEventListener('click', () => {
+        if (bestWeightsSoFar) {
+            if (aiP2TypeSelect) {
+                aiP2TypeSelect.value = 'trained';
+                updateAITypeVisibility();
+            }
+            alert("已應用最佳權重！現在請選擇「Trained (訓練模型)」作為 AI 類型開始遊戲。");
+            trainingPanel.classList.add('hidden');
+            initGame(); 
+        }
+    });
+
+    function startTraining() {
+        isTraining = true;
+        currentGeneration = 1;
+        maxGenerations = parseInt(trainGenerationsEl.value, 10);
+        const popSize = parseInt(trainPopSizeEl.value, 10);
+        
+        trainingPopulation = [];
+        for (let i = 0; i < popSize; i++) {
+            trainingPopulation.push({
+                id: i,
+                weights: {
+                    scoreScale: 150, 
+                    threatScale: 25, 
+                    doubleSetupScale: 75, 
+                    p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
+                    p2ThreatVal: Math.floor(Math.random() * 100) - 50,
+                    p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
+                    p2DoubleVal: Math.floor(Math.random() * 200) - 100
+                },
+                fitness: 0
+            });
+        }
+        
+        startTrainingBtn.classList.add('hidden');
+        stopTrainingBtn.classList.remove('hidden');
+        // 隱藏 benchmark
+        benchmarkResultContainer.classList.add('hidden');
+        runBenchmarkBtn.disabled = true;
+
+        trainProgressBar.classList.add('animated');
+        trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
+        
+        sendGenerationToWorker();
     }
 
-    // 啟動遊戲
+    function stopTraining() {
+        isTraining = false;
+        startTrainingBtn.classList.remove('hidden');
+        stopTrainingBtn.classList.add('hidden');
+        trainProgressBar.classList.remove('animated');
+        trainStatusEl.textContent = "訓練已手動停止";
+    }
+
+    // **** 新增：結束訓練並啟用按鈕 ****
+    function finishTraining() {
+        stopTraining();
+        if (trainStatusEl) trainStatusEl.textContent = "訓練已完成！";
+        alert(`訓練完成！共模擬 ${currentGeneration} 個世代。`);
+    }
+
+    function sendGenerationToWorker() {
+        if (!isTraining) return;
+        const gameConfig = {
+            dots: dots,
+            lines: lines,
+            triangles: triangles,
+            totalTriangles: totalTriangles,
+            requiredLineLength: REQUIRED_LINE_LENGTH,
+            isScoreAndGoAgain: scoreAndGoCheckbox.checked,
+            allowShorterLines: allowShorterLinesCheckbox.checked 
+        };
+        aiWorker.postMessage({
+            command: 'train_generation',
+            population: trainingPopulation,
+            gameConfig: gameConfig
+        });
+    }
+
+    function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard) {
+        if (!isTraining) return;
+
+        populationWithFitness.sort((a, b) => b.fitness - a.fitness);
+        const bestAgent = populationWithFitness[0];
+        
+        bestWeightsSoFar = bestAgent.weights;
+        
+        // **** 修正：每一代都啟用按鈕與驗證功能 ****
+        if (applyWeightsBtn) applyWeightsBtn.disabled = false;
+        if (runBenchmarkBtn) runBenchmarkBtn.disabled = false; // 啟用實力驗證
+
+        trainGenEl.textContent = currentGeneration;
+        trainFitnessEl.textContent = bestAgent.fitness; 
+        wScoreEl.textContent = "150 (固定)";
+        wThreatEl.textContent = `P1:${bestAgent.weights.p1ThreatVal}, P2:${bestAgent.weights.p2ThreatVal}`;
+        wSetupEl.textContent = `P1:${bestAgent.weights.p1DoubleVal}, P2:${bestAgent.weights.p2DoubleVal}`;
+        
+        if (strategyKeysList) {
+            updateStrategyAnalysis(bestAgent.weights);
+        }
+        if (bestAgentBoard) {
+            renderMiniBoard(bestAgentBoard);
+        }
+        
+        const progressPercent = (currentGeneration / maxGenerations) * 100;
+        trainProgressBar.style.width = `${progressPercent}%`;
+
+        if (currentGeneration >= maxGenerations) {
+            finishTraining();
+            return;
+        }
+
+        trainingPopulation = evolvePopulation(populationWithFitness);
+        
+        currentGeneration++;
+        trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
+        sendGenerationToWorker(); 
+    }
+    
+    // **** 新增：處理實力驗證點擊 ****
+    if (runBenchmarkBtn) {
+        runBenchmarkBtn.addEventListener('click', () => {
+            if (!bestWeightsSoFar) return;
+            runBenchmarkBtn.textContent = "⚡ 正在對戰 (0/10)...";
+            runBenchmarkBtn.disabled = true;
+            benchmarkResultContainer.classList.add('hidden');
+            
+            // 傳送指令給 Worker
+            const gameConfig = {
+                dots: dots,
+                lines: lines,
+                triangles: triangles,
+                totalTriangles: totalTriangles,
+                requiredLineLength: REQUIRED_LINE_LENGTH,
+                isScoreAndGoAgain: scoreAndGoCheckbox.checked,
+                allowShorterLines: allowShorterLinesCheckbox.checked 
+            };
+            aiWorker.postMessage({
+                command: 'benchmark',
+                weights: bestWeightsSoFar,
+                gameConfig: gameConfig
+            });
+        });
+    }
+
+    // **** 新增：處理實力驗證結果顯示 ****
+    function handleBenchmarkResult(wins, losses, draws) {
+        runBenchmarkBtn.textContent = "⚡ 挑戰原始 AI (10 場)";
+        runBenchmarkBtn.disabled = false;
+        
+        benchmarkResultContainer.classList.remove('hidden');
+        benchWinsEl.textContent = wins;
+        benchLossesEl.textContent = losses;
+        benchDrawsEl.textContent = draws;
+        
+        let summaryText = "";
+        const total = wins + losses + draws;
+        const winRate = ((wins / total) * 100).toFixed(0);
+        
+        if (wins > losses) {
+            summaryText = `🎉 恭喜！訓練模型勝率 ${winRate}%，比預設 AI 更強！`;
+            benchSummaryEl.style.color = "#27ae60";
+        } else if (wins < losses) {
+            summaryText = `⚠️ 警告：訓練模型勝率僅 ${winRate}%，可能需要更多世代或調整參數。`;
+            benchSummaryEl.style.color = "#e67e22";
+        } else {
+            summaryText = `⚖️ 旗鼓相當：雙方實力接近 (勝率 ${winRate}%)。`;
+            benchSummaryEl.style.color = "#7f8c8d";
+        }
+        benchSummaryEl.textContent = summaryText;
+    }
+
+    function updateStrategyAnalysis(w) {
+        strategyKeysList.innerHTML = '';
+        const p2T = w.p2ThreatVal;
+        const p2D = w.p2DoubleVal;
+        const addKey = (text) => {
+            const li = document.createElement('li');
+            li.textContent = text;
+            strategyKeysList.appendChild(li);
+        };
+        
+        if (Math.abs(p2D) > Math.abs(p2T) * 1.5) {
+            addKey("✨ 必勝關鍵：高度重視雙重陷阱佈局 (Double Setup)，優先於單純製造威脅。");
+        } else if (p2T > 30) {
+            addKey("⚔ 必勝關鍵：採取極具侵略性的策略，不斷製造單一威脅迫使對手防守。");
+        } else {
+            addKey("⚖ 必勝關鍵：在佈局與進攻之間取得平衡，不偏廢任一方。");
+        }
+        if (p2T > 0 && p2D > 0) {
+            addKey("📈 獲勝徵兆：AI 積極尋找能同時增加威脅與佈局的機會。");
+        } else if (p2T < 0) {
+            addKey("🛡 獲勝徵兆：AI 傾向於防守反擊，刻意避免過早暴露單一威脅。");
+        }
+        const aggression = Math.abs(p2T) + Math.abs(p2D);
+        if (aggression > 100) {
+            addKey("🔥 風格：高風險高回報，對關鍵點位的爭奪非常激烈。");
+        } else {
+            addKey("🧊 風格：穩健保守，傾向於一步步蠶食版圖。");
+        }
+    }
+    
+    function renderMiniBoard(linesData) {
+        if (!strategyBoardCanvasWrapper) return;
+        strategyBoardCanvasWrapper.innerHTML = ''; 
+        const miniCanvas = document.createElement('canvas');
+        const scale = 0.6; 
+        miniCanvas.width = canvas.width * scale;
+        miniCanvas.height = canvas.height * scale;
+        const mCtx = miniCanvas.getContext('2d');
+        
+        mCtx.fillStyle = '#f8f9fa';
+        mCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+        mCtx.scale(scale, scale);
+        
+        for (const id in linesData) {
+            const line = linesData[id];
+            if (line.drawn) {
+                mCtx.beginPath();
+                mCtx.moveTo(line.p1.x, line.p1.y);
+                mCtx.lineTo(line.p2.x, line.p2.y);
+                const color = (line.player === 1) ? '#3498db' : '#e74c3c';
+                mCtx.strokeStyle = color;
+                mCtx.lineWidth = 4; 
+                mCtx.stroke();
+                
+                if (line.sharedBy !== 0 && line.sharedBy !== line.player) {
+                    const sharedColor = (line.sharedBy === 1) ? '#3498db' : '#e74c3c';
+                    mCtx.strokeStyle = sharedColor;
+                    mCtx.lineWidth = 2;
+                    mCtx.stroke();
+                }
+            } else {
+                mCtx.beginPath();
+                mCtx.moveTo(line.p1.x, line.p1.y);
+                mCtx.lineTo(line.p2.x, line.p2.y);
+                mCtx.strokeStyle = '#e0e0e0';
+                mCtx.lineWidth = 1;
+                mCtx.stroke();
+            }
+        }
+        dots.forEach(row => {
+            row.forEach(dot => {
+                mCtx.beginPath();
+                mCtx.arc(dot.x, dot.y, 4, 0, 2 * Math.PI); 
+                mCtx.fillStyle = '#34495e';
+                mCtx.fill();
+            });
+        });
+        const img = document.createElement('img');
+        img.src = miniCanvas.toDataURL();
+        img.className = 'preview-board-img';
+        strategyBoardCanvasWrapper.appendChild(img);
+    }
+
+    function evolvePopulation(oldPop) {
+        const newPop = [];
+        const popSize = oldPop.length;
+        const eliteCount = Math.floor(popSize * 0.2);
+        for (let i = 0; i < eliteCount; i++) {
+            newPop.push({ ...oldPop[i], fitness: 0 }); 
+        }
+        while (newPop.length < popSize) {
+            const parent1 = tournamentSelect(oldPop);
+            const parent2 = tournamentSelect(oldPop);
+            const childWeights = crossover(parent1.weights, parent2.weights);
+            mutate(childWeights);
+            newPop.push({
+                id: newPop.length,
+                weights: childWeights,
+                fitness: 0
+            });
+        }
+        return newPop;
+    }
+
+    function tournamentSelect(pop) {
+        const k = 3;
+        let best = null;
+        for (let i = 0; i < k; i++) {
+            const ind = pop[Math.floor(Math.random() * pop.length)];
+            if (!best || ind.fitness > best.fitness) best = ind;
+        }
+        return best;
+    }
+
+    function crossover(w1, w2) {
+        return {
+            scoreScale: 150,
+            threatScale: 25,
+            doubleSetupScale: 75,
+            p1ThreatVal: Math.random() > 0.5 ? w1.p1ThreatVal : w2.p1ThreatVal,
+            p2ThreatVal: Math.random() > 0.5 ? w1.p2ThreatVal : w2.p2ThreatVal,
+            p1DoubleVal: Math.random() > 0.5 ? w1.p1DoubleVal : w2.p1DoubleVal,
+            p2DoubleVal: Math.random() > 0.5 ? w1.p2DoubleVal : w2.p2DoubleVal,
+        };
+    }
+
+    function mutate(w) {
+        const mutationRate = 0.1;
+        const mutationStrength = 10;
+        
+        if (Math.random() < mutationRate) w.p1ThreatVal += (Math.random() - 0.5) * mutationStrength;
+        if (Math.random() < mutationRate) w.p2ThreatVal += (Math.random() - 0.5) * mutationStrength;
+        if (Math.random() < mutationRate) w.p1DoubleVal += (Math.random() - 0.5) * mutationStrength;
+        if (Math.random() < mutationRate) w.p2DoubleVal += (Math.random() - 0.5) * mutationStrength;
+        
+        w.p1ThreatVal = Math.round(w.p1ThreatVal);
+        w.p2ThreatVal = Math.round(w.p2ThreatVal);
+        w.p1DoubleVal = Math.round(w.p1DoubleVal);
+        w.p2DoubleVal = Math.round(w.p2DoubleVal);
+    }
+    
     initGame();
 });
