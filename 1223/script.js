@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: 1219/script.js
+fullContent:
 document.addEventListener('DOMContentLoaded', () => {
     // 取得 HTML 元素
     const canvas = document.getElementById('game-canvas');
@@ -78,9 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const trainStatusEl = document.getElementById('train-status');
     const trainPopSizeEl = document.getElementById('train-pop-size');
     const trainGenerationsEl = document.getElementById('train-generations');
-    // [新增] 繼承與準確率 UI 元素
-    const trainInheritCheckbox = document.getElementById('train-inherit-checkbox');
-    const trainAccuracyEl = document.getElementById('train-accuracy');
     
     const wScoreEl = document.getElementById('w-score');
     const wThreatEl = document.getElementById('w-threat');
@@ -205,6 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let batchLog = []; 
     let batchTotalGames = 0;
     let batchGamesCompleted = 0;
+    let savedBatchLayout = null; // [新增] 用於儲存批次對戰的自訂佈局
     
     // 用於儲存 `lines` 的固定順序
     let sortedLineIds = []; 
@@ -215,20 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentGeneration = 0;
     let maxGenerations = 50;
     let bestWeightsSoFar = null; 
-
-    // [新增] 初始化時嘗試讀取本地儲存的權重
-    try {
-        const storedWeights = localStorage.getItem('triangle_ai_best_weights');
-        if (storedWeights) {
-            bestWeightsSoFar = JSON.parse(storedWeights);
-            // 更新 UI 顯示紀錄中的數值
-            if (wThreatEl) wThreatEl.textContent = `P1:${bestWeightsSoFar.p1ThreatVal}, P2:${bestWeightsSoFar.p2ThreatVal} (歷史紀錄)`;
-            if (wSetupEl) wSetupEl.textContent = `P1:${bestWeightsSoFar.p1DoubleVal}, P2:${bestWeightsSoFar.p2DoubleVal} (歷史紀錄)`;
-            if (applyWeightsBtn) applyWeightsBtn.disabled = false;
-        }
-    } catch (e) {
-        console.warn("無法讀取 LocalStorage:", e);
-    }
 
     // **** Undo 堆疊 ****
     let undoStack = [];
@@ -260,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 handleAIMoveResult(data.bestMove);
             } else if (data.type === 'training_result') {
-                handleTrainingGenerationComplete(data.population, data.bestAgentBoard, data.validationStats);
+                handleTrainingGenerationComplete(data.population, data.bestAgentBoard);
             }
         };
         aiWorker.onerror = (e) => {
@@ -528,6 +516,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // **** 批次對戰的佈局應用 (新增邏輯) ****
+        if (isBatchRunning && savedBatchLayout && savedBatchLayout.length > 0) {
+            savedBatchLayout.forEach(item => {
+                if (lines[item.id]) {
+                    lines[item.id].drawn = true;
+                    lines[item.id].player = item.player;
+                    lines[item.id].sharedBy = item.sharedBy;
+                }
+            });
+            // 重新計算三角形歸屬
+            recalculateBoardStatus();
+            
+            // 標記歷史紀錄為「從佈局開始」
+            gameHistoryLog.settings.startedFromLayout = true;
+            gameHistoryLog.turns.push({
+                turn: 0,
+                player: "System",
+                playerType: "Layout (Batch)", 
+                move: "從佈局開始 (批次)",
+                segmentsDrawn: [], 
+                scoreGained: 0,
+                trianglesCompleted: [], 
+                newScoreP1: scores[1],
+                newScoreP2: scores[2],
+                stateBefore: "", 
+                stateAfter: getBoardStateString(lines) 
+            });
+        }
+        
         updateUI();
         drawCanvas();
         
@@ -536,6 +553,13 @@ document.addEventListener('DOMContentLoaded', () => {
             bindDragListeners();
         } else {
             bindClickListeners();
+        }
+        
+        // 如果佈局已經讓遊戲結束
+        if (isBatchRunning && (scores[1] + scores[2] === totalTriangles)) {
+             logAI(`--- 從佈局開始 (批次)，但遊戲已結束 ---`);
+             endGame();
+             return;
         }
 
         const isP1AI = (gameMode === 2);
@@ -906,15 +930,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedDot2 = null;
         drawCanvas();
     }
-
-    function startGameFromLayout() {
-        removeCanvasListeners();
-        if (inputModeSelect.value === 'drag') {
-            bindDragListeners();
-        } else {
-            bindClickListeners();
-        }
-
+    
+    // [新增] 重新計算盤面狀態（共用於 startGameFromLayout 與 Batch Init）
+    function recalculateBoardStatus() {
         scores = { 1: 0, 2: 0 };
         let totalFilledThisGame = 0;
         
@@ -946,6 +964,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 tri.player = 0;
             }
         });
+        return totalFilledThisGame;
+    }
+
+    function startGameFromLayout() {
+        removeCanvasListeners();
+        if (inputModeSelect.value === 'drag') {
+            bindDragListeners();
+        } else {
+            bindClickListeners();
+        }
+
+        const totalFilledThisGame = recalculateBoardStatus();
         
         gameMode = parseInt(gameModeSelect.value, 10);
         isScoreAndGoAgain = scoreAndGoCheckbox.checked;
@@ -1722,10 +1752,45 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("請輸入有效的對戰次數 (大於 0)。");
             return;
         }
+
+        // [新增] 批次佈局邏輯
+        savedBatchLayout = null;
+        let useLayout = false;
+        
+        // 檢查是否有已繪製的線段
+        const hasDrawnLines = Object.values(lines).some(l => l.drawn);
+
         if (isSetupMode) {
-            alert("請先完成或退出佈局模式，再開始批次對戰。");
-            return;
+             // 如果在佈局模式下，直接使用當前佈局
+             useLayout = true;
+             // 強制退出佈局模式狀態，以便 AI 運作
+             isSetupMode = false;
+             setupModeButton.textContent = '進入佈局模式';
+             setupModeButton.classList.remove('success');
+             setupModeButton.classList.add('primary');
+             togglePlayControls(true); 
+             setupActionBar.classList.add('hidden');
+             cancelSetupLine(); // 清除選取點
+        } else if (hasDrawnLines) {
+             // 如果不在佈局模式但盤面上有線 (例如剛佈局完或玩到一半)
+             if (confirm("偵測到盤面上有已繪製的線段。是否將此佈局應用於所有批次對戰場次？\n(按「取消」將使用空棋盤開始)")) {
+                 useLayout = true;
+             }
         }
+
+        if (useLayout) {
+             savedBatchLayout = [];
+             for (const id in lines) {
+                 if (lines[id].drawn) {
+                     savedBatchLayout.push({
+                         id: id,
+                         player: lines[id].player,
+                         sharedBy: lines[id].sharedBy
+                     });
+                 }
+             }
+        }
+
         isBatchRunning = true;
         pngStepLog = [];
         batchLog = [];
@@ -1744,6 +1809,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isBatchRunning) return; 
         if (confirm("您確定要終止批次對戰嗎？目前已完成的紀錄將會匯出。")) {
             isBatchRunning = false;
+            savedBatchLayout = null; // 清除佈局
             if (isAIThinking) {
                 aiWorker.terminate();
                 isAIThinking = false;
@@ -1789,6 +1855,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     csvContent += `# AI (P2) 類型: ${gameLog.settings.aiTypeP2}\n`;
                 }
                 csvContent += `# 得分後再走一步: ${gameLog.settings.isScoreAndGoAgain}\n`;
+                if (gameLog.settings.startedFromLayout) {
+                     csvContent += `# 狀態: 從佈局開始\n`;
+                }
                 csvContent += `# 紀錄時間: ${gameLog.settings.dateTime}\n\n`;
 
                 csvContent += headers.join(",") + "\n";
@@ -2180,45 +2249,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const popSize = parseInt(trainPopSizeEl.value, 10);
         
         trainingPopulation = [];
-
-        // [修改] 決定是否使用基礎權重 (從記憶體或 LocalStorage)
-        let baseWeights = null;
-        if (trainInheritCheckbox && trainInheritCheckbox.checked) {
-            if (bestWeightsSoFar) {
-                baseWeights = bestWeightsSoFar;
-            } else {
-                // 如果記憶體沒有，再試一次 LocalStorage (防呆)
-                const stored = localStorage.getItem('triangle_ai_best_weights');
-                if (stored) {
-                    try { baseWeights = JSON.parse(stored); } catch(e) {}
-                }
-            }
-        }
-
         for (let i = 0; i < popSize; i++) {
-            let initialWeights;
-
-            // [修改] 初始族群生成策略
-            if (baseWeights) {
-                if (i === 0) {
-                    // 1. 菁英保留：完全複製最佳權重
-                    initialWeights = { ...baseWeights };
-                } else if (i < popSize * 0.7) {
-                    // 2. 變異探索：以最佳權重為基礎進行變異 (70%)
-                    initialWeights = { ...baseWeights };
-                    mutate(initialWeights);
-                } else {
-                    // 3. 隨機引入：保持多樣性，避免陷入局部最佳解 (剩餘)
-                    initialWeights = createRandomWeights();
-                }
-            } else {
-                // 沒有繼承時，全部隨機
-                initialWeights = createRandomWeights();
-            }
-
             trainingPopulation.push({
                 id: i,
-                weights: initialWeights,
+                weights: {
+                    scoreScale: 150, 
+                    threatScale: 25, 
+                    doubleSetupScale: 75, 
+                    p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
+                    p2ThreatVal: Math.floor(Math.random() * 100) - 50,
+                    p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
+                    p2DoubleVal: Math.floor(Math.random() * 200) - 100
+                },
                 fitness: 0
             });
         }
@@ -2229,19 +2271,6 @@ document.addEventListener('DOMContentLoaded', () => {
         trainStatusEl.textContent = `正在模擬第 ${currentGeneration} / ${maxGenerations} 世代...`;
         
         sendGenerationToWorker();
-    }
-
-    // [新增] 獨立出隨機權重生成函式
-    function createRandomWeights() {
-        return {
-            scoreScale: 150, 
-            threatScale: 25, 
-            doubleSetupScale: 75, 
-            p1ThreatVal: Math.floor(Math.random() * 100) - 50, 
-            p2ThreatVal: Math.floor(Math.random() * 100) - 50,
-            p1DoubleVal: Math.floor(Math.random() * 200) - 100, 
-            p2DoubleVal: Math.floor(Math.random() * 200) - 100
-        };
     }
 
     function stopTraining() {
@@ -2277,7 +2306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard, validationStats) {
+    function handleTrainingGenerationComplete(populationWithFitness, bestAgentBoard) {
         if (!isTraining) return;
 
         populationWithFitness.sort((a, b) => b.fitness - a.fitness);
@@ -2285,30 +2314,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         bestWeightsSoFar = bestAgent.weights;
         
-        // [新增] 將最佳權重儲存到 LocalStorage
-        try {
-            localStorage.setItem('triangle_ai_best_weights', JSON.stringify(bestWeightsSoFar));
-        } catch (e) {
-            console.warn("無法寫入 LocalStorage");
-        }
-
         // **** 修正：每一代都啟用按鈕 ****
         if (applyWeightsBtn) applyWeightsBtn.disabled = false;
 
         trainGenEl.textContent = currentGeneration;
         trainFitnessEl.textContent = bestAgent.fitness; 
-        
-        // [新增] 更新準確率顯示
-        if (validationStats && trainAccuracyEl) {
-            const acc = validationStats.winRate.toFixed(1);
-            trainAccuracyEl.textContent = `${acc}%`;
-            
-            // 根據勝率改變顏色
-            if (validationStats.winRate >= 80) trainAccuracyEl.style.color = '#27ae60'; // 綠色
-            else if (validationStats.winRate >= 50) trainAccuracyEl.style.color = '#f39c12'; // 橘色
-            else trainAccuracyEl.style.color = '#e74c3c'; // 紅色
-        }
-
         wScoreEl.textContent = "150 (固定)";
         wThreatEl.textContent = `P1:${bestAgent.weights.p1ThreatVal}, P2:${bestAgent.weights.p2ThreatVal}`;
         wSetupEl.textContent = `P1:${bestAgent.weights.p1DoubleVal}, P2:${bestAgent.weights.p2DoubleVal}`;
@@ -2478,3 +2488,4 @@ document.addEventListener('DOMContentLoaded', () => {
     
     initGame();
 });
+}
