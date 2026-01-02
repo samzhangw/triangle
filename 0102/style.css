@@ -781,3 +781,63 @@ canvas:hover {
 .btn.warning:active {
     background-image: linear-gradient(to bottom, #e67e22, #d35400);
 }
+
+/* --- 9. 新增功能樣式 (數字和與紀錄列表) --- */
+
+#move-history-container {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    height: 200px; /* 固定高度 */
+    overflow-y: auto; /* 允許垂直滾動 */
+    padding: 0;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+    margin-top: 5px;
+}
+
+#move-history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.history-item {
+    padding: 8px 15px;
+    border-bottom: 1px solid #f1f2f6;
+    font-size: 0.9rem;
+    font-family: monospace;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-item:last-child {
+    border-bottom: none;
+    background-color: #fffde7; /* 高亮最新一筆 */
+}
+
+.history-item.p1 {
+    border-left: 4px solid var(--p1-color);
+    color: #2c3e50;
+}
+
+.history-item.p2 {
+    border-left: 4px solid var(--p2-color);
+    color: #2c3e50;
+}
+
+.history-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.sum-badge {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #555;
+    margin-left: 5px;
+}
