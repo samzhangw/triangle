@@ -141,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentPlayer = 1;
     let scores = { 1: 0, 2: 0 };
-    // 點數總和變數
     let p1PointSum = 0;
     let p2PointSum = 0;
 
@@ -484,16 +483,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 newScoreP2: scores[2],
                 stateBefore: "", 
                 stateAfter: getBoardStateString(lines),
-                lineSum: 0,        // [新增] 初始
-                p1TotalPointSum: 0, // [新增] 初始
-                p2TotalPointSum: 0  // [新增] 初始
+                lineSum: 0,
+                lineCalc: "",       // [新增] 初始算式
+                p1TotalPointSum: 0, 
+                p2TotalPointSum: 0  
             });
         }
         
         updateUI();
         drawCanvas();
         
-        // **** 只有在非預設模式時，才上傳數字配置到 GAS ****
         if (customNumbers.length > 0) {
             saveBoardNumbersToGAS();
         }
@@ -533,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // **** 儲存 (存檔) 函式 ****
     function saveBoardNumbersToGAS() {
         if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS_WEB_APP_URL_HERE") || GAS_API_URL.length < 20) {
             console.log("GAS_API_URL 未設定或無效，跳過資料上傳。");
@@ -553,26 +551,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error("❌ 無法傳送至 GAS:", err));
     }
 
-    // **** 新增：讀取 (讀檔) 函式 ****
     function loadBoardFromCloud() {
         if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS_WEB_APP_URL_HERE") || GAS_API_URL.length < 20) {
             return;
         }
         console.log("正在嘗試從雲端讀取設定...");
 
-        // 使用標準 GET 請求讀取
         fetch(GAS_API_URL) 
         .then(response => response.json())
         .then(data => {
             if (data.status === "success" && data.pattern) {
                 console.log("✅ 已讀取雲端設定:", data.pattern);
                 
-                // 1. 更新輸入框
                 if (customNumberPatternInput) {
                     customNumberPatternInput.value = data.pattern;
                 }
                 
-                // 2. 重新初始化遊戲 (這會使用剛填入的設定來繪製)
                 initGame();
                 
             } else {
@@ -581,7 +575,6 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => {
             console.error("雲端讀取失敗:", err);
-            // 讀取失敗時不影響遊戲，維持預設
         });
     }
 
@@ -987,9 +980,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     newScoreP2: scores[2],
                     stateBefore: "", 
                     stateAfter: getBoardStateString(lines),
-                    lineSum: 0,         // [新增]
-                    p1TotalPointSum: 0, // [新增]
-                    p2TotalPointSum: 0  // [新增]
+                    lineSum: 0,
+                    lineCalc: "",       // [新增]
+                    p1TotalPointSum: 0, 
+                    p2TotalPointSum: 0  
                 }
             ],
             summary: {}
@@ -1263,12 +1257,11 @@ document.addEventListener('DOMContentLoaded', () => {
             winnerMessage = "平手！";
         }
         
-        // [修改] 將最終數字和也加入摘要
         gameHistoryLog.summary = {
             finalScoreP1: scores[1],
             finalScoreP2: scores[2],
-            finalPointSumP1: p1PointSum, // [新增]
-            finalPointSumP2: p2PointSum, // [新增]
+            finalPointSumP1: p1PointSum,
+            finalPointSumP2: p2PointSum,
             winnerMessage: winnerMessage
         };
         
@@ -1689,9 +1682,10 @@ document.addEventListener('DOMContentLoaded', () => {
             newScoreP2: scores[2],
             stateBefore: stateBefore, 
             stateAfter: stateAfter,
-            lineSum: lineSum, // 該步的數字和
-            p1TotalPointSum: p1PointSum, // [新增] 當下P1累積數字和
-            p2TotalPointSum: p2PointSum  // [新增] 當下P2累積數字和
+            lineSum: lineSum, 
+            lineCalc: `${valA}+${valB}`, // [新增] 紀錄算式
+            p1TotalPointSum: p1PointSum, 
+            p2TotalPointSum: p2PointSum 
         };
         gameHistoryLog.turns.push(logEntry); 
         turnCounter++; 
@@ -1802,10 +1796,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!batchLog || batchLog.length === 0) {
             console.warn("沒有可匯出的批次 CSV 紀錄。");
         } else {
-            // [修改] 新增欄位 Header
+            // [修改] 新增欄位 Header "Calculation"
             const headers = [
                 "Game_ID", "Turn", "Player", "PlayerType", "Move (r,c)", 
-                "SegmentsDrawn (ID)", "LineSum", "P1_TotalPointSum", "P2_TotalPointSum", // [新增]
+                "SegmentsDrawn (ID)", "Calculation", "LineSum", "P1_TotalPointSum", "P2_TotalPointSum", // [新增]
                 "ScoreThisTurn", "TrianglesCompleted (Dots)",
                 "P1_TotalScore", "P2_TotalScore",
                 "BoardState_Before", "BoardState_After" 
@@ -1839,17 +1833,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const segmentsStr = entry.segmentsDrawn.join('; ');
                     const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
 
-                    // [修改] 新增欄位 Data
+                    // [修改] 填入 entry.lineCalc
                     const row = [
                         gameID, 
                         entry.turn,
                         entry.player,
                         escapeCSV(entry.playerType),
                         escapeCSV(entry.move),
-                        escapeCSV(segmentsStr), 
-                        entry.lineSum,           // [新增]
-                        entry.p1TotalPointSum,   // [新增]
-                        entry.p2TotalPointSum,   // [新增]
+                        escapeCSV(segmentsStr),
+                        escapeCSV(entry.lineCalc), // [新增]
+                        entry.lineSum,           
+                        entry.p1TotalPointSum,   
+                        entry.p2TotalPointSum,   
                         entry.scoreGained,
                         escapeCSV(trianglesStr), 
                         entry.newScoreP1,
@@ -1865,7 +1860,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     csvContent += `# 勝利訊息: ${escapeCSV(gameLog.summary.winnerMessage)}\n`;
                     csvContent += `# P1 最終分數: ${gameLog.summary.finalScoreP1}\n`;
                     csvContent += `# P2 最終分數: ${gameLog.summary.finalScoreP2}\n`;
-                    // [修改] 新增總結
                     csvContent += `# P1 數字總和: ${gameLog.summary.finalPointSumP1}\n`;
                     csvContent += `# P2 數字總和: ${gameLog.summary.finalPointSumP2}\n`;
                 }
@@ -1890,9 +1884,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("尚未有任何遊戲紀錄 (目前這場)。");
             return;
         }
+        // [修改] 單場匯出也加上 Calculation 欄位以保持一致
         const headers = [
             "Turn", "Player", "PlayerType", "Move (r,c)", 
-            "SegmentsDrawn (ID)", "ScoreThisTurn", "TrianglesCompleted (Dots)",
+            "SegmentsDrawn (ID)", "Calculation", "LineSum", // [修改]
+            "ScoreThisTurn", "TrianglesCompleted (Dots)",
             "P1_TotalScore", "P2_TotalScore",
             "BoardState_Before", "BoardState_After" 
         ];
@@ -1928,6 +1924,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 escapeCSV(entry.playerType),
                 escapeCSV(entry.move),
                 escapeCSV(segmentsStr), 
+                escapeCSV(entry.lineCalc), // [新增]
+                entry.lineSum,
                 entry.scoreGained,
                 escapeCSV(trianglesStr), 
                 entry.newScoreP1,
@@ -1943,8 +1941,8 @@ document.addEventListener('DOMContentLoaded', () => {
             csvContent += `# 勝利訊息: ${escapeCSV(gameHistoryLog.summary.winnerMessage)}\n`;
             csvContent += `# P1 最終分數: ${gameHistoryLog.summary.finalScoreP1}\n`;
             csvContent += `# P2 最終分數: ${gameHistoryLog.summary.finalScoreP2}\n`;
-            csvContent += `# P1 數字總和: ${gameHistoryLog.summary.finalPointSumP1}\n`; // [新增]
-            csvContent += `# P2 數字總和: ${gameHistoryLog.summary.finalPointSumP2}\n`; // [新增]
+            csvContent += `# P1 數字總和: ${gameHistoryLog.summary.finalPointSumP1}\n`;
+            csvContent += `# P2 數字總和: ${gameHistoryLog.summary.finalPointSumP2}\n`;
         }
 
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
