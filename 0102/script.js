@@ -2468,3 +2468,4 @@ function addMoveToHistoryUI(player, calcStr, sum) {
 initGame();
 // 嘗試從雲端載入設定 (若成功將覆蓋預設值)
 loadBoardFromCloud();
+});
