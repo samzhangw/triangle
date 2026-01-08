@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>點點圍三角 - 具備機器學習功能</title> 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css" >
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+</head>
+<body>
+
+    <h1>點點圍三角</h1>
+    <p class="subtitle">連點成線、圍出三角。支援 AI 對戰與機器訓練！</p>
+
+    <div id="game-container">
+
+        <div id="game-primary-column">
+            <div id="training-panel" class="hidden">
+                <div class="panel-header">
+                    <h2>🧬 AI 訓練中心 (基因演算法)</h2>
+                    <button id="close-training-button" class="btn-icon">✕</button>
+                </div>
+                
+                <div class="training-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">目前世代</span>
+                        <span class="stat-value" id="train-gen">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">最高適應度 (勝場)</span>
+                        <span class="stat-value highlight" id="train-best-fitness">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">模型強度 (vs Greedy)</span>
+                        <span class="stat-value" id="train-accuracy" style="color: #27ae60;">--%</span>
+                    </div>
+                </div>
+
+                <div class="progress-container">
+                    <div id="train-progress-bar" class="progress-bar" style="width: 0%"></div>
+                </div>
+                <p id="train-status">準備就緒</p>
+
+                <div class="weights-display">
+                    <h3>🏆 目前最佳參數 (基因)</h3>
+                    <div class="weight-row">
+                        <span>進攻權重 (Score):</span> <span id="w-score">--</span>
+                    </div>
+                    <div class="weight-row">
+                        <span>威脅權重 (Threat):</span> <span id="w-threat">--</span>
+                    </div>
+                    <div class="weight-row">
+                        <span>佈局權重 (Setup):</span> <span id="w-setup">--</span>
+                    </div>
+                </div>
+
+                <div id="strategy-analysis-container" class="analysis-box hidden">
+                    <h3>📊 必勝關鍵與獲勝徵兆分析</h3>
+                    <ul id="strategy-keys-list">
+                        <li>等待訓練數據...</li>
+                    </ul>
+                    <div id="strategy-board-preview-container">
+                        <p class="preview-label">最強 AI 實戰棋盤 (對戰隨機對手):</p>
+                        <div id="strategy-board-canvas-wrapper"></div>
+                    </div>
+                </div>
+
+                <div class="training-controls">
+                    <div class="control-group">
+                        <label>族群大小</label>
+                        <select id="train-pop-size" class="control-select small">
+                            <option value="10">10 個個體</option>
+                            <option value="20" selected>20 個個體</option>
+                            <option value="40">40 個個體</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>訓練世代</label>
+                        <input type="number" id="train-generations" class="control-select small" value="50" min="1" max="1000">
+                    </div>
+                    <div class="control-group" style="grid-column: 1 / -1;">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="train-inherit-checkbox" checked>
+                            <label for="train-inherit-checkbox">繼承歷史最佳權重 (LocalStorage)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="start-training-btn" class="btn success">開始訓練</button>
+                    <button id="stop-training-btn" class="btn danger hidden">停止</button>
+                    <button id="apply-weights-btn" class="btn primary" disabled>應用此參數到遊戲</button>
+                </div>
+            </div>
+
+            <canvas id="game-canvas"></canvas>
+            
+            <div id="action-bar">
+                <button id="confirm-line-button" class="btn primary">確認連線</button>
+                <button id="cancel-line-button" class="btn danger">取消選取</button>
+            </div>
+            
+            <div id="setup-action-bar" class="hidden">
+                <button id="setup-p1-button" class="btn primary">設為 P1 線</button>
+                <button id="setup-p2-button" class="btn danger">設為 P2 線</button>
+                <button id="setup-clear-button" class="btn">清除選取/線段</button>
+            </div>
+
+        </div>
+
+        <div id="game-secondary-column">
+            <div id="round-status-bar" style="text-align: center; margin-bottom: 15px; background: var(--color-surface); padding: 12px; border-radius: 12px; border: 1px solid var(--color-border); box-shadow: var(--shadow-soft); font-weight: 700; color: var(--color-text-secondary);">
+                第 <span id="round-val" style="color: var(--color-text-primary); font-size: 1.4em; font-weight: 800; margin: 0 5px;">1</span> 回合
+            </div>
+
+            <div id="status-bar">
+                <div id="player1-score" class="score-box active">
+                    玩家 1: <span id="score1">0</span>
+                </div>
+                <div id="player2-score" class="score-box">
+                    玩家 2: <span id="score2">0</span>
+                </div>
+            </div>
+
+            <div id="point-sum-bar" style="display: flex; gap: 15px; margin-top: 10px;">
+                <div id="p1-sum-box" class="score-box" style="font-size: 1rem; padding: 10px;">
+                    P1 數字和: <span id="p1-sum-val">0</span>
+                </div>
+                <div id="p2-sum-box" class="score-box" style="font-size: 1rem; padding: 10px;">
+                    P2 數字和: <span id="p2-sum-val">0</span>
+                </div>
+            </div>
+
+            <div class="control-group" style="margin-top: 10px;">
+                <label class="control-label">📝 連線數字紀錄</label>
+                <div id="move-history-container">
+                    <ul id="move-history-list">
+                        <li class="history-placeholder">尚無連線紀錄...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="ai-thinking-message" class="hidden">電腦思考中...</div>
+
+            <div class="control-group">
+                <button id="open-training-btn" class="btn special-ai">
+                    <span class="icon">🧬</span> 進入機器訓練模式
+                </button>
+            </div>
+
+            <div id="ai-log-container" class="control-group hidden">
+                <label class="control-label">AI 模擬紀錄</label>
+                <pre id="ai-log-output"></pre>
+            </div>
+            
+            <div id="batch-controls" class="control-group">
+                <label class="control-label">批次對戰 (僅限 C v C)</label>
+                <div class="batch-input-group">
+                    <input type="number" id="batch-count-input" class="control-select" value="10" min="1" max="1000">
+                    <button id="start-batch-button" class="btn success">開始批次</button>
+                    <button id="stop-batch-button" class="btn danger hidden">終止批次</button> 
+                </div>
+                <p id="batch-status-message"></p>
+            </div>
+
+
+            <div id="game-controls">
+                
+                <div class="control-group control-group-server">
+                    <label class="control-label server-label">☁️ AI 運算核心</label>
+                    <div class="checkbox-group" style="margin-bottom: 8px; border-color: #1abc9c;">
+                        <input type="checkbox" id="use-cloud-checkbox">
+                        <label for="use-cloud-checkbox" style="color: #16a085;">啟用雲端加速 (Colab)</label>
+                    </div>
+                    <input type="text" id="colab-url-input" class="control-select server-input" placeholder="貼上 ngrok 網址 (https://...)" disabled>
+                    <div class="server-hint" id="server-status-hint">勾選上方選項以啟用雲端運算</div>
+                </div>
+
+                <div class="control-group">
+                    <label for="board-size-select" class="control-label">棋盤大小</label>
+                    <select id="board-size-select" class="control-select">
+                        <option value="tiny">迷你 (2-3-2)</option>
+                        <option value="small_343">小型 (3-4-3)</option>
+                        <option value="medium_454">中型 (4-5-4)</option>
+                        <option value="large_565">大型 (5-6-5)</option>
+                        
+                        <option value="small">標準六邊形 (小)</option>
+                        <option value="medium" selected>標準六邊形 (中)</option>
+                        <option value="large">標準六邊形 (大)</option>
+                        
+                        <option value="custom">🔧 自訂 (手動輸入)</option>
+                    </select>
+                </div>
+                
+                <div id="custom-board-input-group" class="control-group hidden">
+                    <label for="custom-board-pattern" class="control-label">輸入每列點數 (逗號分隔)</label>
+                    <input type="text" id="custom-board-pattern" class="control-select" value="3,4,3" placeholder="例如: 3,4,5,4,3">
+                    <p style="font-size: 0.8em; color: #666; margin-top: 5px;">提示：請輸入數字並用逗號隔開。</p>
+                </div>
+
+                <div class="control-group">
+                    <label for="custom-number-pattern" class="control-label">自訂點上數字 (逗號分隔)</label>
+                    <input type="text" id="custom-number-pattern" class="control-select" placeholder="預設: 自動 (1-3)">
+                    <p style="font-size: 0.8em; color: #666; margin-top: 5px;">提示：輸入 0 可隱藏數字；留空則使用預設邏輯。</p>
+                </div>
+
+                <div class="control-group">
+                    <label for="line-length-select" class="control-label">連線格數</label>
+                    <select id="line-length-select" class="control-select">
+                        <option value="1" selected>1 格</option> <option value="2">2 格</option>
+                        <option value="3">3 格</option> <option value="4">4 格</option>
+                        <option value="5">5 格</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="game-mode-select" class="control-label">遊戲模式</label>
+                    <select id="game-mode-select" class="control-select">
+                        <option value="0" selected>玩家 V.S. 玩家</option>
+                        <option value="1">玩家 V.S. 電腦</option>
+                        <option value="2">電腦 V.S. 電腦</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="start-player-select" class="control-label">先手玩家</label>
+                    <select id="start-player-select" class="control-select">
+                        <option value="1" selected>玩家 1 先行</option>
+                        <option value="2">玩家 2 先行</option>
+                    </select>
+                </div>
+                
+                <div class="control-group hidden" id="ai-p1-type-group">
+                    <label for="ai-p1-type-select" class="control-label">AI (P1) 類型</label>
+                    <select id="ai-p1-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="alphazero">AlphaZero (深度學習)</option> <option value="greedy">Greedy (貪婪)</option>
+                        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
+                        <option value="trained">Trained (訓練模型)</option>
+                    </select>
+                </div>
+
+                <div class="control-group hidden" id="ai-p2-type-group">
+                    <label for="ai-p2-type-select" class="control-label">AI (P2) 類型</label>
+                    <select id="ai-p2-type-select" class="control-select">
+                        <option value="minimax" selected>Minimax (智能)</option>
+                        <option value="alphazero">AlphaZero (深度學習)</option> <option value="greedy">Greedy (貪婪)</option>
+                        <option value="mcts">MCTS (蒙地卡羅 - 強大)</option> 
+                        <option value="trained">Trained (訓練模型)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="input-mode-select" class="control-label">操作模式</label>
+                    <select id="input-mode-select" class="control-select">
+                        <option value="drag" selected>滑動連線</option>
+                        <option value="click">點擊連線</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">遊戲規則</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="score-and-go-checkbox">
+                        <label for="score-and-go-checkbox">得分後再走一步</label>
+                    </div>
+                    
+                    <div class="checkbox-group" style="margin-top: 10px;">
+                        <input type="checkbox" id="allow-shorter-lines-checkbox">
+                        <label for="allow-shorter-lines-checkbox">允許小於指定長度的連線</label>
+                    </div>
+                    <p style="font-size: 0.8em; color: #666; margin: 5px 0 0 0;">
+                        (例如: 設定 3 格時，1~3 格皆可連線)
+                    </p>
+                </div>
+                
+                <div class="control-group">
+                    <label class="control-label">操作功能</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="undo-button" class="btn warning" style="flex: 1;" disabled>
+                            ↩️ 回復上一步
+                        </button>
+                        <button id="reset-button" class="btn success" style="flex: 1;">
+                            🔄 新遊戲
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">佈局模式</label>
+                    <button id="setup-mode-button" class="btn primary">進入佈局模式</button>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">匯出紀錄 (CSV)</label>
+                    <button id="export-log-button" class="btn primary">下載遊戲紀錄</button>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">匯出棋盤 (PNG)</label>
+                    <button id="export-png-button" class="btn primary">下載棋盤圖片</button>
+                </div>
+
+            </div>
+        </div>
+
+    </div> 
+    
+    <div id="modal-overlay" class="hidden">
+        <div id="game-over-message">
+            <span id="winner-text"></span>
+            <span id="final-score-text"></span> 
+            
+            <div id="modal-button-group">
+                <button id="reset-button-modal" class="btn success reset-full-width">重新開始</button>
+                
+                <button id="export-log-button-modal" class="btn primary">下載紀錄 (CSV)</button>
+                <button id="export-png-button-modal" class="btn primary">下載棋盤 (PNG)</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
