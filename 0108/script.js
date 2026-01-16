@@ -602,10 +602,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return l1 && l2 && l3;
     }
 
-    function drawCanvas() {
+function drawCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         triangles.forEach(tri => {
+            // 1. 如果三角形已被佔領，繪製填色
             if (tri.filled) {
                 ctx.beginPath();
                 ctx.moveTo(tri.dots[0].x, tri.dots[0].y);
@@ -614,9 +615,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.closePath();
                 ctx.fillStyle = PLAYER_COLORS[tri.player].fill;
                 ctx.fill();
+            } 
+            // 2. [新增功能] 如果未被佔領，顯示「剩餘幾條線會得分」
+            else {
+                let drawnCount = 0;
+                tri.lineKeys.forEach(key => {
+                    if (lines[key] && lines[key].drawn) {
+                        drawnCount++;
+                    }
+                });
+                const remaining = 3 - drawnCount; // 計算剩餘線段數
+
+                // 計算三角形中心點座標
+                const cx = (tri.dots[0].x + tri.dots[1].x + tri.dots[2].x) / 3;
+                const cy = (tri.dots[0].y + tri.dots[1].y + tri.dots[2].y) / 3;
+
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // 根據剩餘數量設定不同的顏色與大小
+                if (remaining === 1) {
+                    // ★ 危險/得分機會：剩 1 條線 (顯示紅色、大字體)
+                    ctx.fillStyle = 'rgba(231, 76, 60, 0.85)'; 
+                    ctx.font = `800 ${isMobile ? 14 : 16}px "Nunito", sans-serif`;
+                } else if (remaining === 2) {
+                    // 普通：剩 2 條線 (顯示深灰色)
+                    ctx.fillStyle = 'rgba(127, 140, 141, 0.6)';
+                    ctx.font = `600 ${isMobile ? 10 : 12}px "Nunito", sans-serif`;
+                } else {
+                    // 安全：剩 3 條線 (顯示淺灰色，不明顯以免干擾)
+                    ctx.fillStyle = 'rgba(189, 195, 199, 0.4)'; 
+                    ctx.font = `400 ${isMobile ? 9 : 11}px "Nunito", sans-serif`;
+                }
+
+                ctx.fillText(remaining, cx, cy);
             }
         });
         
+        // 3. 繪製線段 (保持原有邏輯)
         for (const id in lines) {
             const line = lines[id];
             
@@ -663,6 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // 4. 繪製點與數字 (保持原有邏輯)
         dots.forEach(row => {
             row.forEach(dot => {
                 if (dot.number > 0) {
@@ -679,6 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        // 5. 繪製互動預覽 (保持原有邏輯)
         if (selectedDot1) {
             ctx.beginPath();
             ctx.arc(selectedDot1.x, selectedDot1.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
