@@ -1,4 +1,3 @@
-
 /**
  * ============================================
  * AI Web Worker (ai-worker.js) - Ultimate Edition
@@ -7,7 +6,7 @@
  * 2. Smart Greedy (防守型貪婪)
  * 3. MCTS (長考版)
  * 4. 基因演算法訓練模擬 (含準確率驗證)
- * 5. [新增] 連鎖解謎搜尋 (Chain Puzzle Search)
+ * 5. [新增] 連鎖解謎搜尋 (Chain Puzzle Search) - 含進度回報
  * ============================================
  */
 
@@ -278,7 +277,7 @@ function findAllScoringMoves(currentLines, currentTriangles, player) {
 }
 
 // ==========================================================
-// 🧩 [新增] 連鎖解謎搜尋 (Chain Puzzle Search)
+// 🧩 [修改] 連鎖解謎搜尋 (Chain Puzzle Search)
 // ==========================================================
 
 function runChainSearch(config) {
@@ -292,19 +291,25 @@ function runChainSearch(config) {
     const minChain = config.minChain || 5;
 
     // 搜尋迴圈：持續模擬遊戲
-    // 為了不卡死 Worker，我們使用 setTimeout 遞迴，或者每次 loop 跑一個遊戲
-    // 但因為這是 Worker，while loop 是安全的，只要能被 terminate (前端 stop) 即可。
     
     let attempts = 0;
     
     while (true) { // 無限迴圈，直到被外部 terminate
         attempts++;
+        
+        // --- [新增] 每 500 次模擬回報一次進度 ---
+        if (attempts % 500 === 0) {
+            self.postMessage({
+                type: 'search_progress',
+                count: attempts
+            });
+        }
+        // ------------------------------------
+
         simulateGameForPuzzle(config.lines, config.triangles, minChain);
         
-        // 每 100 場稍微讓步一下，雖 Worker 不需，但可避免過熱或用於調度
-        if (attempts % 100 === 0) {
-            // 這裡無法 sleep，但無所謂
-        }
+        // 避免 Worker 過熱的微小延遲在 JS 單線程中較難實現，
+        // 且會拖慢速度，因此只要能被 terminate 即可。
     }
 }
 
@@ -441,3 +446,7 @@ function findBestGreedyMove(currentLines, currentTriangles, player) { /* ...原�
 function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) { /* ...原代碼... */ }
 function findBestAIMove(currentLines, currentTriangles, player, weights) { /* ...原代碼... */ }
 
+// --- 5. 訓練相關 (基因演算法) ---
+function runTrainingGeneration(population, config) {
+    // ...原代碼...
+}
