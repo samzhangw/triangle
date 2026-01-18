@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const puzzleStatusEl = document.getElementById('puzzle-status');
     const puzzleListEl = document.getElementById('puzzle-list');
     const puzzleMinChainInput = document.getElementById('puzzle-min-chain');
+    const clearPuzzleListBtn = document.getElementById('clear-puzzle-list-btn'); // 新增：清空按鈕
 
     // 數字總和與紀錄相關元素
     const p1SumValEl = document.getElementById('p1-sum-val');
@@ -212,6 +213,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 logAI(data.message);
             } else if (data.type === 'progress') {
                 logAI(data.message);
+
+            // ==========================================
+            // [新增] 處理搜尋進度顯示 (避免以為當機)
+            // ==========================================
+            } else if (data.type === 'search_progress') {
+                if (puzzleStatusEl) {
+                    puzzleStatusEl.textContent = `🔍 搜尋中... (已模擬 ${data.count} 場局)`;
+                    // 讓文字顏色閃爍以顯示動態感
+                    puzzleStatusEl.style.color = (data.count % 1000 === 0) ? "#27ae60" : "#2ecc71";
+                }
+            // ==========================================
+
             } else if (data.type === 'result') {
                 isAIThinking = false; 
                 const endTime = performance.now();
@@ -2670,39 +2683,36 @@ function drawCanvas() {
         
         puzzleListEl.prepend(li); // 新的在最上面
     }
-// 在 0108/script.js 中
 
-// 1. 取得新按鈕元素
-const clearPuzzleListBtn = document.getElementById('clear-puzzle-list-btn');
+    // 2. 加入事件監聽器
+    if (clearPuzzleListBtn) {
+        clearPuzzleListBtn.addEventListener('click', () => {
+            // 如果列表已經是空的，就不做任何事
+            if (foundPuzzles.length === 0) return;
 
-// 2. 加入事件監聽器
-if (clearPuzzleListBtn) {
-    clearPuzzleListBtn.addEventListener('click', () => {
-        // 如果列表已經是空的，就不做任何事
-        if (foundPuzzles.length === 0) return;
-
-        // 確認提示 (避免誤觸)
-        if (confirm("確定要清空所有已發現的謎題紀錄嗎？")) {
-            clearPuzzleHistory();
-        }
-    });
-}
-
-// 3. 實作清空邏輯函式
-function clearPuzzleHistory() {
-    // 清空儲存謎題資料的陣列
-    foundPuzzles = [];
-    
-    // 清空 UI 列表
-    if (puzzleListEl) {
-        puzzleListEl.innerHTML = '<li class="puzzle-empty">尚未發現謎題，請點擊「開始搜尋」...</li>';
+            // 確認提示 (避免誤觸)
+            if (confirm("確定要清空所有已發現的謎題紀錄嗎？")) {
+                clearPuzzleHistory();
+            }
+        });
     }
-    
-    // (選用) 如果想要連同搜尋編號也重置，可以重置全域計數器
-    // 但在目前的實作中，編號是基於 foundPuzzles.length + 1，
-    // 所以清空陣列後，下一個找到的謎題會自動變回 #1。
-    console.log("謎題紀錄已清空");
-}
+
+    // 3. 實作清空邏輯函式
+    function clearPuzzleHistory() {
+        // 清空儲存謎題資料的陣列
+        foundPuzzles = [];
+        
+        // 清空 UI 列表
+        if (puzzleListEl) {
+            puzzleListEl.innerHTML = '<li class="puzzle-empty">尚未發現謎題，請點擊「開始搜尋」...</li>';
+        }
+        
+        // (選用) 如果想要連同搜尋編號也重置，可以重置全域計數器
+        // 但在目前的實作中，編號是基於 foundPuzzles.length + 1，
+        // 所以清空陣列後，下一個找到的謎題會自動變回 #1。
+        console.log("謎題紀錄已清空");
+    }
+
     function loadPuzzle(puzzleData) {
         if (isPuzzleSearching) {
             stopPuzzleSearch();
