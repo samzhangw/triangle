@@ -1,3 +1,4 @@
+
 /**
  * ============================================
  * AI Web Worker (ai-worker.js) - Ultimate Edition
@@ -7,8 +8,8 @@
  * 3. MCTS (長考版)
  * 4. 基因演算法訓練模擬 (含準確率驗證)
  * 5. 連鎖解謎搜尋 (Chain Puzzle Search)
- * 6. [新增] 模擬最高分策略 (Score-based Monte Carlo)
- * 7. [新增] 最高分佈局生成器 (High Score Generator)
+ * 6. 模擬最高分策略 (Score-based Monte Carlo)
+ * 7. [優化] 最高分佈局生成器 (High Score Generator - No Ambiguity)
  * ============================================
  */
 
@@ -102,7 +103,7 @@ self.onmessage = (e) => {
         runChainSearch(data.gameConfig);
 
     } else if (data.command === 'analyze_score_simulation') {
-        // [新增] 分數導向的蒙地卡羅模擬
+        // 分數導向的蒙地卡羅模擬
         const result = findBestScoreSimulationMove(
             data.gameState.lines,
             data.gameState.triangles,
@@ -116,11 +117,12 @@ self.onmessage = (e) => {
         });
 
     } else if (data.command === 'generate_high_score') {
-        // [新增] 產生最高分佈局
+        // [優化] 產生最高分佈局，回傳完整的三角形歸屬
         const result = generateHighScoreBoard(data.gameConfig);
         self.postMessage({
             type: 'high_score_result',
             finalLines: result.lines,
+            finalTriangles: result.triangles, // 新增：回傳三角形狀態
             finalScore: result.score,
             winner: result.winner
         });
@@ -182,6 +184,7 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
     // 判斷長度邏輯
     if (segmentIds.length === 0 && dotA !== dotB) return false;
     
+    // [規則關鍵] 判斷連線長度
     if (isAllowShorterLines) {
         if (segmentIds.length < 1 || segmentIds.length > REQUIRED_LINE_LENGTH) return false;
     } else {
@@ -192,9 +195,11 @@ function isValidPreviewLine(dotA, dotB, currentLines) {
     let hasUndrawnSegment = false; 
     for (const id of segmentIds) {
         if (!id || !currentLines[id]) { allSegmentsExist = false; break; }
+        // [規則關鍵] 只要這條線上有任何一段是「未畫過」的，就視為合法
         if (!currentLines[id].drawn) { hasUndrawnSegment = true; }
     }
     if (!allSegmentsExist) return false; 
+    // [規則關鍵] 如果全部都畫過了(false)，則此步無效
     if (!hasUndrawnSegment) return false; 
     return true;
 }
@@ -254,7 +259,7 @@ function simulateMove(move, currentLines, currentTriangles, player) {
             const isComplete = tri.lineKeys.every(key => newLines[key] && newLines[key].drawn);
             if (isComplete) {
                 tri.filled = true;
-                tri.player = player;
+                tri.player = player; // 這裡確切記錄是誰完成了三角形
                 scoreGained++;
             }
         }
@@ -1318,13 +1323,14 @@ function generateHighScoreBoard(gameConfig) {
 
     let bestScore = -1;
     let bestLines = null;
+    let bestTriangles = null; // [新增] 儲存最佳局的三角形歸屬
     let bestWinner = 0;
 
-    // 模擬次數：嘗試 1000 場，找出最懸殊的一場
-    // 策略：P1 使用 Smart Greedy (強)，P2 使用 Random (弱)
-    const SIMULATIONS = 1000;
+    // [優化] 減少模擬次數，但增加 AI 深度 (Quality over Quantity)
+    // 之前 1000 次純 Greedy，現在 50 次 Smart Evaluation
+    const SIMULATIONS = 50;
     
-    // logToMain(`[生成器] 正在模擬 ${SIMULATIONS} 場強弱對決...`);
+    // logToMain(`[生成器] 正在模擬 ${SIMULATIONS} 場強弱對決 (Smart Mode)...`);
 
     for (let i = 0; i < SIMULATIONS; i++) {
         // 每次都從空盤開始 (或是傳入的初始盤面)
@@ -1332,6 +1338,7 @@ function generateHighScoreBoard(gameConfig) {
         const initialTriangles = deepCopy(gameConfig.triangles);
         
         // 為了製造懸殊比分，我們讓 P1 為強者
+        // [修改] 這裡會回傳 { lines, triangles, scores }
         const result = simulateOneSidedGame(initialLines, initialTriangles, 1);
         
         // 我們追求的是「單邊最高分」，不管是 P1 還是 P2 (雖然設定上 P1 較強)
@@ -1340,18 +1347,20 @@ function generateHighScoreBoard(gameConfig) {
         if (maxScoreInGame > bestScore) {
             bestScore = maxScoreInGame;
             bestLines = result.lines;
+            bestTriangles = result.triangles; // [新增] 保存這個最佳盤面的三角形狀態
             bestWinner = (result.scores[1] > result.scores[2]) ? 1 : 2;
         }
     }
 
     return {
         lines: bestLines,
+        triangles: bestTriangles, // [新增] 回傳
         score: bestScore,
         winner: bestWinner
     };
 }
 
-// 模擬一場「強者 vs 弱者」的遊戲
+// 模擬一場「強者 vs 弱者」的遊戲 (優化版)
 function simulateOneSidedGame(lines, triangles, strongPlayer) {
     let currentLines = lines;
     let currentTriangles = triangles;
@@ -1372,12 +1381,68 @@ function simulateOneSidedGame(lines, triangles, strongPlayer) {
         if (allMoves.length === 0) break;
 
         if (currentPlayer === strongPlayer) {
-            // 強者策略：Smart Greedy (優先得分，其次防守)
-            selectedMove = findBestGreedyMove(currentLines, currentTriangles, currentPlayer);
-            if (!selectedMove) {
-                 // 如果 Greedy 沒招了 (例如全都是送分步)，隨機走
-                 selectedMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+            // [優化] 強者策略：Smart Evaluation (Depth 1 Minimax)
+            // 不只看當前得分，還評估走完後的盤面優劣 (能有效利用重疊機會)
+            
+            // 1. 先找得分步
+            const scoringMoves = [];
+            for (const move of allMoves) {
+                const sim = simulateMove(move, currentLines, currentTriangles, currentPlayer);
+                if (sim && sim.scoreGained > 0) {
+                    scoringMoves.push({ move, sim });
+                }
             }
+            
+            if (scoringMoves.length > 0) {
+                // 如果有得分步，選評估分數最高的 (例如：得分後還能保留好的後續)
+                let bestScoringMove = null;
+                let maxEval = -Infinity;
+                
+                for (const item of scoringMoves) {
+                    // 簡單評估：得分權重極大 + 盤面評估
+                    // evaluateBoard 回傳 P2-P1，所以 strongPlayer=1 時要取負
+                    let boardVal = evaluateBoard(item.sim.newLines, item.sim.newTriangles, DEFAULT_WEIGHTS);
+                    if (strongPlayer === 1) boardVal = -boardVal;
+                    
+                    const totalVal = (item.sim.scoreGained * 1000) + boardVal;
+                    
+                    if (totalVal > maxEval) {
+                        maxEval = totalVal;
+                        bestScoringMove = item.move;
+                    }
+                }
+                selectedMove = bestScoringMove;
+                
+            } else {
+                // 沒有得分步，選最佳佈局 (Depth 0)
+                let bestNonScoringMove = null;
+                let maxEval = -Infinity;
+                
+                // 為了效能，隨機抽樣 20 個走法來評估，而不是全部
+                // 這樣在大量模擬時才不會太慢
+                const sampleMoves = [];
+                const sampleSize = Math.min(allMoves.length, 20);
+                const indices = new Set();
+                while(indices.size < sampleSize){
+                    indices.add(Math.floor(Math.random() * allMoves.length));
+                }
+                indices.forEach(idx => sampleMoves.push(allMoves[idx]));
+                
+                for (const move of sampleMoves) {
+                    const sim = simulateMove(move, currentLines, currentTriangles, currentPlayer);
+                    if (!sim) continue;
+                    
+                    let boardVal = evaluateBoard(sim.newLines, sim.newTriangles, DEFAULT_WEIGHTS);
+                    if (strongPlayer === 1) boardVal = -boardVal;
+                    
+                    if (boardVal > maxEval) {
+                        maxEval = boardVal;
+                        bestNonScoringMove = move;
+                    }
+                }
+                selectedMove = bestNonScoringMove || allMoves[0];
+            }
+            
         } else {
             // 弱者策略：Random (完全隨機，容易送分)
             selectedMove = allMoves[Math.floor(Math.random() * allMoves.length)];
@@ -1398,5 +1463,6 @@ function simulateOneSidedGame(lines, triangles, strongPlayer) {
         currentPlayer = (currentPlayer === 1) ? 2 : 1;
     }
 
-    return { lines: currentLines, scores: scores };
+    // [新增] 回傳 triangles
+    return { lines: currentLines, triangles: currentTriangles, scores: scores };
 }

@@ -1057,6 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
     
+   // [關鍵修正] 優化 recalculateBoardStatus，解決平手歸屬問題
     function recalculateBoardStatus() {
         scores = { 1: 0, 2: 0 };
         let totalFilledThisGame = 0;
@@ -1076,6 +1077,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 let owner = 0;
                 if (p1Lines > p2Lines) owner = 1;
                 else if (p2Lines > p1Lines) owner = 2;
+                else {
+                    // [修正] 如果線段數平手 (例如各 1.5 條)，強制歸屬於 P1 (或當前玩家)
+                    // 確保 "分數一定會是屬於某一方的"
+                    owner = 1; 
+                }
                 
                 tri.filled = true;
                 tri.player = owner;
@@ -3028,13 +3034,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiWorker) aiWorker.postMessage(payload);
     }
 
+  // [關鍵修正] 修改 handleHighScoreResult，直接套用 Worker 回傳的三角形資料
     function handleHighScoreResult(result) {
         if (aiThinkingMessage) aiThinkingMessage.classList.add('hidden');
         if (aiThinkingMessage) aiThinkingMessage.textContent = "電腦思考中...";
         isAIThinking = false;
 
-        // 2. 載入生成結果
-        // 我們直接覆蓋 lines 狀態
+        // 1. 載入生成結果 (Lines)
         for (const id in result.finalLines) {
             if (lines[id]) {
                 lines[id].drawn = result.finalLines[id].drawn;
@@ -3043,14 +3049,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 3. 重新計算分數與三角形
-        recalculateBoardStatus();
+        // 2. [修正] 載入生成結果 (Triangles - 包含正確的擁有權)
+        // 這樣可以避免因為共享線段平手而導致判定為 Neutral (灰色)
+        if (result.finalTriangles) {
+            scores = { 1: 0, 2: 0 };
+            result.finalTriangles.forEach((t, i) => {
+                if (triangles[i]) {
+                    triangles[i].filled = t.filled;
+                    triangles[i].player = t.player;
+                    if (t.filled && t.player !== 0) {
+                        scores[t.player]++;
+                    }
+                }
+            });
+        } else {
+            // 如果沒有回傳 triangles (舊版 fallback)，才使用重算
+            recalculateBoardStatus();
+        }
         
-        // 4. 更新畫面
+        // 3. 更新畫面
         drawCanvas();
         updateUI();
         
-        // 5. 切換到 PvP 模式，防止 AI 自動繼續下 (因為遊戲可能已經結束或接近結束)
+        // 4. 切換到 PvP 模式，防止 AI 自動繼續下
         gameModeSelect.value = "0"; 
         gameMode = 0;
         updateAITypeVisibility();
@@ -3058,7 +3079,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const winnerName = (result.winner === 1) ? "玩家 1 (藍)" : "玩家 2 (紅)";
         logAI(`★ 生成完畢! 最高分: ${result.finalScore}, 贏家: ${winnerName}`);
         
-        alert(`🏆 佈局生成完畢！\n\nAI 已模擬出其中一局最高分的結果。\n最高分方：${winnerName}\n得分：${result.finalScore} / ${totalTriangles}\n\n(已將畫面更新為該局最終狀態)`);
+        alert(`🏆 佈局生成完畢！\n\nAI 已模擬出其中一局最高分的結果。\n最高分方：${winnerName}\n得分：${result.finalScore} / ${totalTriangles}\n\n(已將畫面更新為該局最終狀態，所有分數已歸屬完畢)`);
     }
 
     // 初始化遊戲
