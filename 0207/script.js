@@ -628,13 +628,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // ⚠️ 修正重點：紅線精準指向三角形的三個邊
+    // ⚠️ 修正重點：繪製「中心原點」並保持紅線垂直
     // ==========================================
     function drawCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         triangles.forEach(tri => {
-            // 1. 如果三角形已被佔領，繪製填色
             if (tri.filled) {
                 ctx.beginPath();
                 ctx.moveTo(tri.dots[0].x, tri.dots[0].y);
@@ -644,42 +643,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fillStyle = PLAYER_COLORS[tri.player].fill;
                 ctx.fill();
             } 
-            // 2. 如果未被佔領，顯示內部的「生命線」(紅色支架)
             else {
-                // 計算三角形中心點
+                // 三角形中心點
                 const cx = (tri.dots[0].x + tri.dots[1].x + tri.dots[2].x) / 3;
                 const cy = (tri.dots[0].y + tri.dots[1].y + tri.dots[2].y) / 3;
 
-                // 2.1 遍歷這個三角形的三條邊
+                // [新增] 繪製三角形中心點 (原點)
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, 2 * Math.PI); // 半徑 4 的圓點
+                ctx.fillStyle = '#e74c3c'; // 與紅線同色
+                ctx.fill();
+
+                // 遍歷這個三角形的三條邊
                 tri.lineKeys.forEach(key => {
                     const line = lines[key];
-                    // 只有當這條邊「還沒被畫上」時，才顯示對應指向它的內部紅線
+                    // 只有當這條邊「還沒被畫上」時，才顯示指向它的內部紅線
                     if (line && !line.drawn) {
                         
                         // 計算該邊的「中點」座標
                         const mx = (line.p1.x + line.p2.x) / 2;
                         const my = (line.p1.y + line.p2.y) / 2;
 
-                        // 計算從中心到中點的向量 (direction vector)
-                        const dx = mx - cx;
-                        const dy = my - cy;
-                        
-                        // 設定紅線長度 (依點距比例縮放)
-                        const innerLineLen = DOT_SPACING_X * 0.35;
-                        
-                        // 將向量正規化 (Normalize) 並乘上長度
-                        const dist = Math.sqrt(dx*dx + dy*dy);
-                        const udx = dx / dist;
-                        const udy = dy / dist;
-                        
-                        // 計算紅線的終點座標
-                        const ex = cx + udx * innerLineLen;
-                        const ey = cy + udy * innerLineLen;
-
-                        // 繪製紅線
+                        // 繪製紅線：從三角形中心 -> 連接到邊的中點 (保持直角)
                         ctx.beginPath();
                         ctx.moveTo(cx, cy);
-                        ctx.lineTo(ex, ey);
+                        ctx.lineTo(mx, my);
                         ctx.strokeStyle = '#e74c3c'; // 紅色
                         ctx.lineWidth = 3;
                         ctx.lineCap = 'round';
