@@ -628,7 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // ⚠️ 修正重點：繪製「中心原點」並保持紅線垂直
+    // ⚠️ 修正重點：結構線與點顏色改為灰藍色
     // ==========================================
     function drawCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -648,27 +648,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cx = (tri.dots[0].x + tri.dots[1].x + tri.dots[2].x) / 3;
                 const cy = (tri.dots[0].y + tri.dots[1].y + tri.dots[2].y) / 3;
 
-                // [新增] 繪製三角形中心點 (原點)
+                // 繪製中心原點 (顏色改為灰藍色)
                 ctx.beginPath();
-                ctx.arc(cx, cy, 4, 0, 2 * Math.PI); // 半徑 4 的圓點
-                ctx.fillStyle = '#e74c3c'; // 與紅線同色
+                ctx.arc(cx, cy, 4, 0, 2 * Math.PI); 
+                ctx.fillStyle = '#95a5a6'; // 灰藍色
                 ctx.fill();
 
                 // 遍歷這個三角形的三條邊
                 tri.lineKeys.forEach(key => {
                     const line = lines[key];
-                    // 只有當這條邊「還沒被畫上」時，才顯示指向它的內部紅線
+                    // 只有當這條邊「還沒被畫上」時，才顯示指向它的內部支架線
                     if (line && !line.drawn) {
                         
                         // 計算該邊的「中點」座標
                         const mx = (line.p1.x + line.p2.x) / 2;
                         const my = (line.p1.y + line.p2.y) / 2;
 
-                        // 繪製紅線：從三角形中心 -> 連接到邊的中點 (保持直角)
+                        // 繪製支架線：從中心 -> 邊的中點 (直角)
                         ctx.beginPath();
                         ctx.moveTo(cx, cy);
                         ctx.lineTo(mx, my);
-                        ctx.strokeStyle = '#e74c3c'; // 紅色
+                        ctx.strokeStyle = '#95a5a6'; // 灰藍色
                         ctx.lineWidth = 3;
                         ctx.lineCap = 'round';
                         ctx.stroke();
