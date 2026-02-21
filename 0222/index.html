@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -228,17 +227,24 @@
                 <div class="control-group">
                     <label for="board-size-select" class="control-label">棋盤大小</label>
                     <select id="board-size-select" class="control-select">
-                        <option value="tiny">迷你 (2-3-2)</option>
-                        <option value="small_343">小型 (3-4-3)</option>
-                        <option value="medium_454">中型 (4-5-4)</option>
-                        <option value="large_565">大型 (5-6-5)</option>
-                        
-                        <option value="small">標準六邊形 (小)</option>
-                        <option value="medium" selected>標準六邊形 (中)</option>
-                        <option value="large">標準六邊形 (大)</option>
-                        <option value="star">⭐ 星型 (Star)</option>
-                        
-                        <option value="custom">🔧 自訂 (手動輸入)</option>
+                        <optgroup label="2D 平面棋盤">
+                            <option value="tiny">迷你 (2-3-2)</option>
+                            <option value="small_343">小型 (3-4-3)</option>
+                            <option value="medium_454">中型 (4-5-4)</option>
+                            <option value="large_565">大型 (5-6-5)</option>
+                            <option value="small">標準六邊形 (小)</option>
+                            <option value="medium" selected>標準六邊形 (中)</option>
+                            <option value="large">標準六邊形 (大)</option>
+                            <option value="star">⭐ 星型 (Star)</option>
+                            <option value="custom">🔧 自訂 (手動輸入)</option>
+                        </optgroup>
+                        <optgroup label="3D 正多面體">
+                            <option value="3d_tetrahedron">🔺 3D 正四面體 (4面/6邊)</option>
+                            <option value="3d_cube">🧊 3D 立方體 (6面/12邊)</option>
+                            <option value="3d_octahedron">💎 3D 正八面體 (8面/12邊)</option>
+                            <option value="3d_dodecahedron">⚽ 3D 正十二面體 (12面/30邊)</option>
+                            <option value="3d_icosahedron">💠 3D 正二十面體 (20面/30邊)</option>
+                        </optgroup>
                     </select>
                 </div>
                 
