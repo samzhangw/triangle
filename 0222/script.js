@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ⚠️ 設定：請在此處貼上您的 GAS 網址 (api寫死)
     // ============================================
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbweL9Cq16M0ujhVaLLG8GXcu2bi5tfc_Ee5qYJcGCvHDDX2H33o6_617oI82yDSRy2h/exec"; 
-    // 請確認已做過「建立新版本」的部署動作
 
     // 取得 HTML 元素
     const canvas = document.getElementById('game-canvas');
@@ -138,6 +137,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; 
     const ANGLE_TOLERANCE = 1.5; 
 
+    // --- 3D 相關變數 ---
+    let is3DMode = false;
+    let angleX = 0.5;
+    let angleY = 0.5;
+    let isRotating = false;
+    let lastRotX = 0;
+    let lastRotY = 0;
+    const PHI = (1 + Math.sqrt(5)) / 2; 
+
+    function getPolyhedronData(type) {
+        let vertices = [], faces = [];
+        switch (type) {
+            case '3d_tetrahedron':
+                vertices = [[1,1,1], [1,-1,-1], [-1,1,-1], [-1,-1,1]];
+                faces = [[0,1,2], [0,1,3], [0,2,3], [1,2,3]];
+                break;
+            case '3d_cube':
+                vertices = [[1,1,1], [1,1,-1], [1,-1,1], [1,-1,-1], [-1,1,1], [-1,1,-1], [-1,-1,1], [-1,-1,-1]];
+                faces = [[0,1,3,2], [4,5,7,6], [0,1,5,4], [2,3,7,6], [0,2,6,4], [1,3,7,5]];
+                break;
+            case '3d_octahedron':
+                vertices = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]];
+                faces = [[0,2,4], [0,2,5], [0,3,4], [0,3,5], [1,2,4], [1,2,5], [1,3,4], [1,3,5]];
+                break;
+            case '3d_dodecahedron':
+                const phi = (1 + Math.sqrt(5)) / 2;
+                const invPhi = 1 / phi;
+                vertices = [
+                    [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+                    [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+                    [0, phi, invPhi], [0, phi, -invPhi], [0, -phi, invPhi], [0, -phi, -invPhi],
+                    [invPhi, 0, phi], [-invPhi, 0, phi], [invPhi, 0, -phi], [-invPhi, 0, -phi],
+                    [phi, invPhi, 0], [phi, -invPhi, 0], [-phi, invPhi, 0], [-phi, -invPhi, 0]
+                ];
+                faces = [
+                    [0, 16, 1, 9, 8], [0, 8, 4, 13, 12], [0, 12, 2, 17, 16],
+                    [1, 16, 17, 3, 14], [1, 14, 15, 5, 9], [2, 12, 13, 6, 10],
+                    [2, 10, 11, 3, 17], [3, 11, 7, 15, 14], [4, 8, 9, 5, 18],
+                    [4, 18, 19, 6, 13], [5, 15, 7, 19, 18], [6, 19, 7, 11, 10]
+                ];
+                break;
+            case '3d_icosahedron':
+                const t = (1.0 + Math.sqrt(5.0)) / 2.0;
+                vertices = [
+                    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+                    [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+                    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+                ];
+                faces = [
+                    [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+                    [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+                    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+                    [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+                ];
+                break;
+        }
+        return { vertices, faces };
+    }
+
     function computeRowLengths(size) {
         switch (size) {
             case 'tiny': return [2, 3, 2];
@@ -152,8 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const PLAYER_COLORS = {
-        1: { line: '#3498db', fill: 'rgba(52, 152, 219, 0.3)' },
-        2: { line: '#e74c3c', fill: 'rgba(231, 76, 60, 0.3)' },
+        1: { line: '#3498db', fill: 'rgba(52, 152, 219, 0.4)' },
+        2: { line: '#e74c3c', fill: 'rgba(231, 76, 60, 0.4)' },
         0: { line: '#95a5a6', fill: 'rgba(149, 165, 166, 0.2)' } 
     };
     const DEFAULT_LINE_COLOR = '#e0e0e0';
@@ -162,8 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let scores = { 1: 0, 2: 0 };
     let p1PointSum = 0;
     let p2PointSum = 0;
-    
-    // 回合數變數
     let currentRound = 1;
 
     let dots = []; 
@@ -196,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let undoStack = [];
     const MAX_UNDO_DEPTH = 50;
 
-    // 謎題搜尋變數
     let isPuzzleSearching = false;
     let foundPuzzles = [];
 
@@ -280,7 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 更新回合數 UI
     function updateRoundUI() {
         if (roundValEl) roundValEl.textContent = currentRound;
     }
@@ -318,14 +372,17 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAITypeVisibility();
         
         turnCounter = 1;
-        
-        // 初始化回合數
         currentRound = 1;
         updateRoundUI();
 
+        gameMode = isBatchRunning ? 2 : parseInt(gameModeSelect.value, 10);
+        
+        const sizeValue = (boardSizeSelect && boardSizeSelect.value) ? boardSizeSelect.value : 'medium';
+        is3DMode = sizeValue.startsWith('3d_');
+
         gameHistoryLog = {
             settings: {
-                boardSize: boardSizeSelect.value,
+                boardSize: sizeValue,
                 lineLength: lineLengthSelect.value,
                 gameMode: isBatchRunning ? "電腦 V.S. 電腦" : gameModeSelect.options[gameModeSelect.selectedIndex].text,
                 startPlayer: startPlayerSelect.options[startPlayerSelect.selectedIndex].text, 
@@ -340,9 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
             summary: {}
         };
 
-        gameMode = isBatchRunning ? 2 : parseInt(gameModeSelect.value, 10);
-        
-        const sizeValue = (boardSizeSelect && boardSizeSelect.value) ? boardSizeSelect.value : 'medium';
         if (sizeValue === 'custom') {
             const patternStr = customBoardPatternInput.value || "3,4,3";
             try {
@@ -352,6 +406,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("解析自訂棋盤失敗", e);
                 ROW_LENGTHS = [3, 4, 3];
             }
+        } else if (is3DMode) {
+            ROW_LENGTHS = [1]; 
+            angleX = 0.5;
+            angleY = 0.5;
         } else {
             ROW_LENGTHS = computeRowLengths(sizeValue);
         }
@@ -359,16 +417,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const lengthValue = (lineLengthSelect && lineLengthSelect.value) ? lineLengthSelect.value : '1';
         REQUIRED_LINE_LENGTH = parseInt(lengthValue, 10);
 
-        const gridWidth = (Math.max(...ROW_LENGTHS) - 1) * DOT_SPACING_X;
-        const gridHeight = (ROW_LENGTHS.length - 1) * DOT_SPACING_Y;
-        canvas.width = gridWidth + PADDING * 2;
-        canvas.height = gridHeight + PADDING * 2;
+        if (is3DMode) {
+            canvas.width = 600;
+            canvas.height = 600;
+        } else {
+            const gridWidth = (Math.max(...ROW_LENGTHS) - 1) * DOT_SPACING_X;
+            const gridHeight = (ROW_LENGTHS.length - 1) * DOT_SPACING_Y;
+            canvas.width = gridWidth + PADDING * 2;
+            canvas.height = gridHeight + PADDING * 2;
+        }
 
         const startPlayerValue = startPlayerSelect.value;
         currentPlayer = (startPlayerValue === '2') ? 2 : 1;
         
         scores = { 1: 0, 2: 0 };
-        // 重置數字總和與清空列表
         p1PointSum = 0;
         p2PointSum = 0;
         updatePointSumUI();
@@ -387,116 +449,159 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aiLogContainer && !isBatchRunning) aiLogContainer.classList.add('hidden');
         clearAILog();
 
-        dots = [];
-        const rowOffsets = new Array(ROW_LENGTHS.length).fill(0);
-        const midRow = Math.floor(ROW_LENGTHS.length / 2);
-        const midCol = Math.floor(ROW_LENGTHS[midRow] / 2);
-        
-        rowOffsets[midRow] = (2 - (midCol % 3) + 3) % 3;
-
-        for (let r = midRow - 1; r >= 0; r--) {
-            const lenCurr = ROW_LENGTHS[r];
-            const lenNext = ROW_LENGTHS[r+1];
-            if (lenNext > lenCurr) {
-                rowOffsets[r] = (rowOffsets[r+1] - 1 + 3) % 3;
-            } else {
-                rowOffsets[r] = (rowOffsets[r+1] - 2 + 3) % 3;
-            }
-        }
-
-        for (let r = midRow; r < ROW_LENGTHS.length - 1; r++) {
-            const lenCurr = ROW_LENGTHS[r];
-            const lenNext = ROW_LENGTHS[r+1];
-            if (lenNext > lenCurr) {
-                rowOffsets[r+1] = (rowOffsets[r] + 1) % 3;
-            } else {
-                rowOffsets[r+1] = (rowOffsets[r] + 2) % 3;
-            }
-        }
-
         let customNumbers = [];
         if (customNumberPatternInput && customNumberPatternInput.value.trim() !== "") {
             customNumbers = customNumberPatternInput.value.split(/[,，\s]+/)
                 .map(s => parseInt(s.trim(), 10))
                 .filter(n => !isNaN(n));
         }
-        let globalDotCounter = 0; 
 
-        ROW_LENGTHS.forEach((len, r) => {
-            dots[r] = [];
-            const rowWidth = (len - 1) * DOT_SPACING_X;
-            const offsetX = (canvas.width - rowWidth) / 2;
-            for (let c = 0; c < len; c++) {
+        if (is3DMode) {
+            const polyData = getPolyhedronData(sizeValue);
+            dots = [[]]; 
+            let globalDotCounter = 0;
+
+            polyData.vertices.forEach((v, idx) => {
                 let dotNumber;
                 if (customNumbers.length > 0) {
                     dotNumber = customNumbers[globalDotCounter % customNumbers.length];
                 } else {
-                    dotNumber = (rowOffsets[r] + c) % 3 + 1;
+                    dotNumber = (idx % 3) + 1;
                 }
                 globalDotCounter++;
 
-                dots[r][c] = {
-                    x: c * DOT_SPACING_X + offsetX,
-                    y: r * DOT_SPACING_Y + PADDING,
-                    r: r, c: c,
-                    id: `${r},${c}`, 
-                    number: dotNumber 
-                };
-            }
-        });
+                dots[0].push({
+                    x3d: v[0], y3d: v[1], z3d: v[2],
+                    x: 0, y: 0, r: 0, c: idx, id: `0,${idx}`, number: dotNumber
+                });
+            });
 
-        lines = {};
-        for (let r = 0; r < ROW_LENGTHS.length; r++) {
-            for (let c = 0; c < ROW_LENGTHS[r]; c++) {
-                const d1 = dots[r][c];
-
-                if (c < ROW_LENGTHS[r] - 1) {
-                    const d2 = dots[r][c + 1];
-                    const id = getLineId(d1, d2);
-                    lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id };
-                }
-
-                if (r < ROW_LENGTHS.length - 1) {
-                    const len1 = ROW_LENGTHS[r];
-                    const len2 = ROW_LENGTHS[r+1];
-                    const shift = (len2 - len1) / 2;
-                    const leftIndex = Math.floor(c + shift);
-                    const rightIndex = Math.ceil(c + shift);
-                    
-                    if (leftIndex >= 0 && leftIndex < len2) {
-                        const d_dl = dots[r + 1][leftIndex];
-                        const id_dl = getLineId(d1, d_dl);
-                        lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+            polyData.faces.forEach(face => {
+                let lineKeys = [];
+                let faceDots = [];
+                for (let i = 0; i < face.length; i++) {
+                    let d1 = dots[0][face[i]];
+                    let d2 = dots[0][face[(i + 1) % face.length]];
+                    let id = getLineId(d1, d2);
+                    if (!lines[id]) {
+                        lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id };
                     }
-                    
-                    if (rightIndex >= 0 && rightIndex < len2 && rightIndex !== leftIndex) {
-                        const d_dr = dots[r + 1][rightIndex];
-                        const id_dr = getLineId(d1, d_dr);
-                        lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                    if (!lineKeys.includes(id)) {
+                        lineKeys.push(id);
                     }
                 }
-            }
-        }
-        
-        sortedLineIds = Object.keys(lines).sort();
+                face.forEach(idx => faceDots.push(dots[0][idx]));
+                triangles.push({ lineKeys: lineKeys, dots: faceDots, filled: false, player: 0 });
+                totalTriangles++;
+            });
 
-        triangles = [];
-        totalTriangles = 0;
-        const allDots = dots.flat();
-        for (let i = 0; i < allDots.length; i++) {
-            for (let j = i + 1; j < allDots.length; j++) {
-                for (let k = j + 1; k < allDots.length; k++) {
-                    const d1 = allDots[i];
-                    const d2 = allDots[j];
-                    const d3 = allDots[k];
-                    
-                    if (isValidTriangle(d1, d2, d3)) {
-                         triangles.push({
-                            lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
-                            dots: [d1, d2, d3],
-                            filled: false, player: 0
-                        });
-                        totalTriangles++;
+            sortedLineIds = Object.keys(lines).sort();
+
+        } else {
+            const rowOffsets = new Array(ROW_LENGTHS.length).fill(0);
+            const midRow = Math.floor(ROW_LENGTHS.length / 2);
+            const midCol = Math.floor(ROW_LENGTHS[midRow] / 2);
+            
+            rowOffsets[midRow] = (2 - (midCol % 3) + 3) % 3;
+
+            for (let r = midRow - 1; r >= 0; r--) {
+                const lenCurr = ROW_LENGTHS[r];
+                const lenNext = ROW_LENGTHS[r+1];
+                if (lenNext > lenCurr) {
+                    rowOffsets[r] = (rowOffsets[r+1] - 1 + 3) % 3;
+                } else {
+                    rowOffsets[r] = (rowOffsets[r+1] - 2 + 3) % 3;
+                }
+            }
+
+            for (let r = midRow; r < ROW_LENGTHS.length - 1; r++) {
+                const lenCurr = ROW_LENGTHS[r];
+                const lenNext = ROW_LENGTHS[r+1];
+                if (lenNext > lenCurr) {
+                    rowOffsets[r+1] = (rowOffsets[r] + 1) % 3;
+                } else {
+                    rowOffsets[r+1] = (rowOffsets[r] + 2) % 3;
+                }
+            }
+
+            let globalDotCounter = 0; 
+
+            ROW_LENGTHS.forEach((len, r) => {
+                dots[r] = [];
+                const rowWidth = (len - 1) * DOT_SPACING_X;
+                const offsetX = (canvas.width - rowWidth) / 2;
+                for (let c = 0; c < len; c++) {
+                    let dotNumber;
+                    if (customNumbers.length > 0) {
+                        dotNumber = customNumbers[globalDotCounter % customNumbers.length];
+                    } else {
+                        dotNumber = (rowOffsets[r] + c) % 3 + 1;
+                    }
+                    globalDotCounter++;
+
+                    dots[r][c] = {
+                        x: c * DOT_SPACING_X + offsetX,
+                        y: r * DOT_SPACING_Y + PADDING,
+                        r: r, c: c,
+                        id: `${r},${c}`, 
+                        number: dotNumber 
+                    };
+                }
+            });
+
+            lines = {};
+            for (let r = 0; r < ROW_LENGTHS.length; r++) {
+                for (let c = 0; c < ROW_LENGTHS[r]; c++) {
+                    const d1 = dots[r][c];
+
+                    if (c < ROW_LENGTHS[r] - 1) {
+                        const d2 = dots[r][c + 1];
+                        const id = getLineId(d1, d2);
+                        lines[id] = { p1: d1, p2: d2, drawn: false, player: 0, sharedBy: 0, id: id };
+                    }
+
+                    if (r < ROW_LENGTHS.length - 1) {
+                        const len1 = ROW_LENGTHS[r];
+                        const len2 = ROW_LENGTHS[r+1];
+                        const shift = (len2 - len1) / 2;
+                        const leftIndex = Math.floor(c + shift);
+                        const rightIndex = Math.ceil(c + shift);
+                        
+                        if (leftIndex >= 0 && leftIndex < len2) {
+                            const d_dl = dots[r + 1][leftIndex];
+                            const id_dl = getLineId(d1, d_dl);
+                            lines[id_dl] = { p1: d1, p2: d_dl, drawn: false, player: 0, sharedBy: 0, id: id_dl };
+                        }
+                        
+                        if (rightIndex >= 0 && rightIndex < len2 && rightIndex !== leftIndex) {
+                            const d_dr = dots[r + 1][rightIndex];
+                            const id_dr = getLineId(d1, d_dr);
+                            lines[id_dr] = { p1: d1, p2: d_dr, drawn: false, player: 0, sharedBy: 0, id: id_dr };
+                        }
+                    }
+                }
+            }
+            
+            sortedLineIds = Object.keys(lines).sort();
+
+            triangles = [];
+            totalTriangles = 0;
+            const allDots = dots.flat();
+            for (let i = 0; i < allDots.length; i++) {
+                for (let j = i + 1; j < allDots.length; j++) {
+                    for (let k = j + 1; k < allDots.length; k++) {
+                        const d1 = allDots[i];
+                        const d2 = allDots[j];
+                        const d3 = allDots[k];
+                        
+                        if (isValidTriangle(d1, d2, d3)) {
+                             triangles.push({
+                                lineKeys: [getLineId(d1, d2), getLineId(d1, d3), getLineId(d2, d3)],
+                                dots: [d1, d2, d3],
+                                filled: false, player: 0
+                            });
+                            totalTriangles++;
+                        }
                     }
                 }
             }
@@ -576,7 +681,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function saveBoardNumbersToGAS() {
         if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS_WEB_APP_URL_HERE") || GAS_API_URL.length < 20) {
-            console.log("GAS_API_URL 未設定或無效，跳過資料上傳。");
             return;
         }
         const numbers = dots.map(row => row.map(d => d.number));
@@ -597,22 +701,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GAS_WEB_APP_URL_HERE") || GAS_API_URL.length < 20) {
             return;
         }
-        console.log("正在嘗試從雲端讀取設定...");
 
         fetch(GAS_API_URL) 
         .then(response => response.json())
         .then(data => {
             if (data.status === "success" && data.pattern) {
-                console.log("✅ 已讀取雲端設定:", data.pattern);
-                
                 if (customNumberPatternInput) {
                     customNumberPatternInput.value = data.pattern;
                 }
-                
                 initGame();
-                
-            } else {
-                console.log("雲端無自訂設定，維持預設。");
             }
         })
         .catch(err => {
@@ -627,49 +724,58 @@ document.addEventListener('DOMContentLoaded', () => {
         return l1 && l2 && l3;
     }
 
-    // ==========================================
-    // ⚠️ 修正重點：結構線與點顏色改為灰藍色
-    // ==========================================
     function drawCanvas() {
+        if (is3DMode) {
+            dots[0].forEach(dot => {
+                let y1 = dot.y3d * Math.cos(angleX) - dot.z3d * Math.sin(angleX);
+                let z1 = dot.y3d * Math.sin(angleX) + dot.z3d * Math.cos(angleX);
+                let x2 = dot.x3d * Math.cos(angleY) + z1 * Math.sin(angleY);
+                let z2 = -dot.x3d * Math.sin(angleY) + z1 * Math.cos(angleY);
+
+                let zOffset = 5; 
+                let scaleFactor = isMobile ? 80 : 120; 
+                let scale = scaleFactor / (zOffset + z2);
+
+                dot.x = canvas.width / 2 + x2 * scale * 2.5;
+                dot.y = canvas.height / 2 + y1 * scale * 2.5;
+            });
+        }
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         triangles.forEach(tri => {
             if (tri.filled) {
                 ctx.beginPath();
                 ctx.moveTo(tri.dots[0].x, tri.dots[0].y);
-                ctx.lineTo(tri.dots[1].x, tri.dots[1].y);
-                ctx.lineTo(tri.dots[2].x, tri.dots[2].y);
+                for (let i = 1; i < tri.dots.length; i++) {
+                    ctx.lineTo(tri.dots[i].x, tri.dots[i].y);
+                }
                 ctx.closePath();
                 ctx.fillStyle = PLAYER_COLORS[tri.player].fill;
                 ctx.fill();
             } 
             else {
-                // 三角形中心點
-                const cx = (tri.dots[0].x + tri.dots[1].x + tri.dots[2].x) / 3;
-                const cy = (tri.dots[0].y + tri.dots[1].y + tri.dots[2].y) / 3;
+                let cx = 0, cy = 0;
+                tri.dots.forEach(d => { cx += d.x; cy += d.y; });
+                cx /= tri.dots.length;
+                cy /= tri.dots.length;
 
-                // 繪製中心原點 (顏色改為灰藍色)
                 ctx.beginPath();
                 ctx.arc(cx, cy, 4, 0, 2 * Math.PI); 
-                ctx.fillStyle = '#95a5a6'; // 灰藍色
+                ctx.fillStyle = '#95a5a6'; 
                 ctx.fill();
 
-                // 遍歷這個三角形的三條邊
                 tri.lineKeys.forEach(key => {
                     const line = lines[key];
-                    // 只有當這條邊「還沒被畫上」時，才顯示指向它的內部支架線
                     if (line && !line.drawn) {
-                        
-                        // 計算該邊的「中點」座標
                         const mx = (line.p1.x + line.p2.x) / 2;
                         const my = (line.p1.y + line.p2.y) / 2;
 
-                        // 繪製支架線：從中心 -> 邊的中點 (直角)
                         ctx.beginPath();
                         ctx.moveTo(cx, cy);
                         ctx.lineTo(mx, my);
-                        ctx.strokeStyle = '#95a5a6'; // 灰藍色
-                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = '#bdc3c7'; 
+                        ctx.lineWidth = 2;
                         ctx.lineCap = 'round';
                         ctx.stroke();
                     }
@@ -677,7 +783,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // 3. 繪製線段
         for (const id in lines) {
             const line = lines[id];
             
@@ -724,12 +829,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 4. 繪製點與數字
         dots.forEach(row => {
             row.forEach(dot => {
                 if (dot.number > 0) {
                     ctx.fillStyle = '#2c3e50'; 
-                    ctx.font = `bold ${isMobile ? 10 : 12}px "Nunito", sans-serif`;
+                    ctx.font = `bold ${isMobile ? 12 : 14}px "Nunito", sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom'; 
                     ctx.fillText(dot.number, dot.x, dot.y - DOT_RADIUS - (isMobile ? 1 : 2)); 
@@ -741,7 +845,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // 5. 繪製互動預覽
         if (selectedDot1) {
             ctx.beginPath();
             ctx.arc(selectedDot1.x, selectedDot1.y, DOT_RADIUS + 3, 0, 2 * Math.PI);
@@ -790,6 +893,83 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: mouseX, y: mouseY };
     }
 
+    function handlePointerDown(e) {
+        if (isSetupMode) return; 
+        if (isBatchRunning || isAIThinking) return;
+        const isP1AI = (gameMode === 2);
+        const isP2AI = (gameMode === 1 || gameMode === 2);
+        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
+            return;
+        }
+        
+        const pos = getMousePos(e);
+        const clickedDot = findNearestDot(pos.x, pos.y);
+        
+        if (clickedDot) {
+            if (inputMode === 'drag') {
+                e.preventDefault();
+                isDrawing = true;
+                selectedDot1 = clickedDot;
+                selectedDot2 = null;
+                drawCanvas(); 
+            }
+        } else if (is3DMode) {
+            e.preventDefault();
+            isRotating = true;
+            lastRotX = pos.x;
+            lastRotY = pos.y;
+        }
+    }
+    
+    function handlePointerMove(e) {
+        if (!isDrawing && !isRotating) return;
+        e.preventDefault();
+        const pos = getMousePos(e);
+        
+        if (isDrawing && inputMode === 'drag') {
+            const hoverDot = findNearestDot(pos.x, pos.y);
+            if (hoverDot && hoverDot !== selectedDot1) {
+                selectedDot2 = hoverDot;
+            } else {
+                selectedDot2 = null;
+            }
+            drawCanvas();
+        } else if (isRotating && is3DMode) {
+            const dx = pos.x - lastRotX;
+            const dy = pos.y - lastRotY;
+            angleY += dx * 0.01; 
+            angleX -= dy * 0.01; 
+            lastRotX = pos.x;
+            lastRotY = pos.y;
+            drawCanvas(); 
+        }
+    }
+
+    function handlePointerEnd(e) {
+        if (isRotating) {
+            isRotating = false;
+            return;
+        }
+        if (isDrawing && inputMode === 'drag') {
+            isDrawing = false;
+            if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
+                confirmLine();
+            } else {
+                cancelLine();
+            }
+        }
+    }
+    
+    function handlePointerLeave(e) {
+        if (isRotating) {
+            isRotating = false;
+        }
+        if (isDrawing && inputMode === 'drag') {
+            isDrawing = false;
+            cancelLine();
+        }
+    }
+
     function handleCanvasClick(e) {
         if (isSetupMode) {
             handleSetupDotClick(e);
@@ -806,6 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const pos = getMousePos(e);
         const clickedDot = findNearestDot(pos.x, pos.y);
+        
         if (!clickedDot) {
             if (selectedDot1) cancelLine(); 
             return;
@@ -828,53 +1009,36 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCanvas();
     }
 
-    function handleDragStart(e) {
-        if (isSetupMode) return; 
-        if (isBatchRunning || isAIThinking) return;
-        const isP1AI = (gameMode === 2);
-        const isP2AI = (gameMode === 1 || gameMode === 2);
-        if ((currentPlayer === 1 && isP1AI) || (currentPlayer === 2 && isP2AI)) {
-            return;
-        }
-        e.preventDefault();
-        const pos = getMousePos(e);
-        const clickedDot = findNearestDot(pos.x, pos.y);
-        if (clickedDot) {
-            isDrawing = true;
-            selectedDot1 = clickedDot;
-            selectedDot2 = null;
-            drawCanvas(); 
-        }
-    }
-    
-    function handleDragMove(e) {
-        if (!isDrawing) return;
-        e.preventDefault();
-        const pos = getMousePos(e);
-        const hoverDot = findNearestDot(pos.x, pos.y);
-        if (hoverDot && hoverDot !== selectedDot1) {
-            selectedDot2 = hoverDot;
-        } else {
-            selectedDot2 = null;
-        }
-        drawCanvas();
+    function removeCanvasListeners() {
+        canvas.removeEventListener('mousedown', handlePointerDown);
+        canvas.removeEventListener('mousemove', handlePointerMove);
+        canvas.removeEventListener('mouseup', handlePointerEnd);
+        canvas.removeEventListener('mouseleave', handlePointerLeave);
+        canvas.removeEventListener('touchstart', handlePointerDown);
+        canvas.removeEventListener('touchmove', handlePointerMove);
+        canvas.removeEventListener('touchend', handlePointerEnd);
+        canvas.removeEventListener('click', handleCanvasClick); 
     }
 
-    function handleDragEnd(e) {
-        if (!isDrawing) return;
-        isDrawing = false;
-        if (selectedDot1 && selectedDot2 && isValidPreviewLine(selectedDot1, selectedDot2, lines)) {
-            confirmLine();
-        } else {
-            cancelLine();
-        }
+    function bindDragListeners() {
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('mousemove', handlePointerMove);
+        canvas.addEventListener('mouseup', handlePointerEnd);
+        canvas.addEventListener('mouseleave', handlePointerLeave);
+        canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+        canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+        canvas.addEventListener('touchend', handlePointerEnd);
     }
-    
-    function handleDragLeave(e) {
-        if (isDrawing) {
-            isDrawing = false;
-            cancelLine();
-        }
+
+    function bindClickListeners() {
+        canvas.addEventListener('click', handleCanvasClick);
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('mousemove', handlePointerMove);
+        canvas.addEventListener('mouseup', handlePointerEnd);
+        canvas.addEventListener('mouseleave', handlePointerLeave);
+        canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+        canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+        canvas.addEventListener('touchend', handlePointerEnd);
     }
 
     function togglePlayControls(isEnabled) {
@@ -1029,7 +1193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPlayer = parseInt(startPlayerSelect.value, 10);
         
         turnCounter = 1;
-        // 佈局開始時重置回合數
         currentRound = 1;
         updateRoundUI();
 
@@ -1190,6 +1353,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function findIntermediateDots(dotA, dotB) {
+        if (is3DMode) {
+            return [dotA, dotB];
+        }
         const intermediateDots = [];
         const minX = Math.min(dotA.x, dotB.x) - 1;
         const maxX = Math.max(dotA.x, dotB.x) + 1;
@@ -1214,6 +1380,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function isValidPreviewLine(dotA, dotB, currentLines) {
         if (!dotA || !dotB) return false;
+        
+        if (is3DMode) {
+            const id = getLineId(dotA, dotB);
+            if (currentLines[id] && !currentLines[id].drawn) return true;
+            return false;
+        }
+
         const dy = dotB.y - dotA.y;
         const dx = dotB.x - dotA.x;
         if (dx !== 0 || dy !== 0) {
@@ -1277,10 +1450,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentPlayer = (currentPlayer === 1) ? 2 : 1;
-        
-        // 交換玩家時，回合數 + 1
         currentRound++;
-        
         updateUI();
 
         const isP1AI_new = (gameMode === 2);
@@ -1322,8 +1492,6 @@ document.addEventListener('DOMContentLoaded', () => {
             player1ScoreBox.classList.remove('active');
             player2ScoreBox.classList.add('active', 'player2');
         }
-        
-        // 更新回合數顯示
         updateRoundUI();
     }
 
@@ -1406,13 +1574,11 @@ document.addEventListener('DOMContentLoaded', () => {
             lines: JSON.parse(JSON.stringify(lines)),
             triangles: JSON.parse(JSON.stringify(triangles)),
             scores: { ...scores },
-            // 儲存當下的數字總和與紀錄列表狀態
             pointSums: { 1: p1PointSum, 2: p2PointSum },
             historyHTML: moveHistoryList ? moveHistoryList.innerHTML : '',
             
             currentPlayer: currentPlayer,
             turnCounter: turnCounter,
-            // 儲存當前回合數
             currentRound: currentRound,
             
             gameHistoryLog: JSON.parse(JSON.stringify(gameHistoryLog)),
@@ -1444,7 +1610,6 @@ document.addEventListener('DOMContentLoaded', () => {
         triangles = prevState.triangles;
         scores = prevState.scores;
         
-        // 還原數字總和與紀錄列表
         if (prevState.pointSums) {
             p1PointSum = prevState.pointSums[1];
             p2PointSum = prevState.pointSums[2];
@@ -1458,7 +1623,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         currentPlayer = prevState.currentPlayer;
         turnCounter = prevState.turnCounter;
-        // 還原回合數
         currentRound = prevState.currentRound;
 
         gameHistoryLog = prevState.gameHistoryLog;
@@ -1523,6 +1687,7 @@ document.addEventListener('DOMContentLoaded', () => {
             weightsToSend = bestWeightsSoFar;
         }
         
+        // 🚨 關鍵修改：加上 is3DMode 傳送給 AI
         const payload = {
             command: 'start',
             aiType: aiType, 
@@ -1535,7 +1700,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalTriangles: totalTriangles,
                 requiredLineLength: REQUIRED_LINE_LENGTH,
                 isScoreAndGoAgain: isScoreAndGoAgain,
-                allowShorterLines: isAllowShorterLines 
+                allowShorterLines: isAllowShorterLines,
+                is3DMode: is3DMode // 👈👈👈
             }
         };
 
@@ -1641,7 +1807,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (moveResult.scoreGained > 0 && isScoreAndGoAgain) {
                 logAI(`--- 電腦 ${currentPlayer} 得分，再走一次 ---`);
-                // [注意] AI 得分後再走一次，視為同一回合，不切換玩家
                 if (isBatchRunning) {
                     setTimeout(triggerAIMove, 10);
                 } else {
@@ -1677,7 +1842,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return stateChars.join('');
     }
-
 
     function applyMoveToBoard(dotA, dotB, player) {
         
@@ -1720,27 +1884,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return { newSegmentDrawn: false, gameEnded: false, scoreGained: 0 };
         }
 
-        // ==========================================
-        // [修改] 計算並更新數字總和 (加總線段上所有點)
-        // ==========================================
         let lineSum = 0;
         let calcParts = [];
         
-        // allDotsOnLine 包含了這條線上所有的點 (起點、終點、以及中間經過的點)
         allDotsOnLine.forEach(d => {
             const val = d.number || 0;
             lineSum += val;
             calcParts.push(val);
         });
         
-        const lineCalcStr = calcParts.join(' + '); // 產生如 "1 + 5 + 3" 的算式字串
+        const lineCalcStr = calcParts.join(' + ');
 
         if (player === 1) p1PointSum += lineSum;
         else if (player === 2) p2PointSum += lineSum;
         
         updatePointSumUI();
-        addMoveToHistoryUI(player, lineCalcStr, lineSum); // 傳遞算式字串與總和
-        // ==========================================
+        addMoveToHistoryUI(player, lineCalcStr, lineSum); 
 
         const scoreBefore = scores[player];
         let totalFilledThisGame = 0;
@@ -1784,7 +1943,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const logEntry = {
             turn: turnCounter,
-            // 紀錄該步的回合數
             round: currentRound, 
             player: player,
             playerType: playerType, 
@@ -1797,7 +1955,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stateBefore: stateBefore, 
             stateAfter: stateAfter,
             lineSum: lineSum, 
-            lineCalc: lineCalcStr, // 紀錄完整的算式
+            lineCalc: lineCalcStr, 
             p1TotalPointSum: p1PointSum, 
             p2TotalPointSum: p2PointSum 
         };
@@ -1910,7 +2068,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!batchLog || batchLog.length === 0) {
             console.warn("沒有可匯出的批次 CSV 紀錄。");
         } else {
-            // [修改] 新增欄位 Header "Round"
             const headers = [
                 "Game_ID", "Round", "Turn", "Player", "PlayerType", "Move (r,c)", 
                 "SegmentsDrawn (ID)", "Calculation", "LineSum", "P1_TotalPointSum", "P2_TotalPointSum", 
@@ -1947,7 +2104,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const segmentsStr = entry.segmentsDrawn.join('; ');
                     const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
 
-                    // [修改] 填入 entry.round
                     const row = [
                         gameID,
                         entry.round, 
@@ -1999,7 +2155,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("尚未有任何遊戲紀錄 (目前這場)。");
             return;
         }
-        // [修改] 新增 Round 欄位
         const headers = [
             "Round", "Turn", "Player", "PlayerType", "Move (r,c)", 
             "SegmentsDrawn (ID)", "Calculation", "LineSum", 
@@ -2034,7 +2189,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const trianglesStr = entry.trianglesCompleted.map(t => t.dots).join('; ');
 
             const row = [
-                entry.round, // [新增]
+                entry.round, 
                 entry.turn,
                 entry.player,
                 escapeCSV(entry.playerType),
@@ -2160,31 +2315,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function removeCanvasListeners() {
-        canvas.removeEventListener('mousedown', handleDragStart);
-        canvas.removeEventListener('mousemove', handleDragMove);
-        canvas.removeEventListener('mouseup', handleDragEnd);
-        canvas.removeEventListener('mouseleave', handleDragLeave);
-        canvas.removeEventListener('touchstart', handleDragStart);
-        canvas.removeEventListener('touchmove', handleDragMove);
-        canvas.removeEventListener('touchend', handleDragEnd);
-        canvas.removeEventListener('click', handleCanvasClick); 
-    }
-
-    function bindDragListeners() {
-        canvas.addEventListener('mousedown', handleDragStart);
-        canvas.addEventListener('mousemove', handleDragMove);
-        canvas.addEventListener('mouseup', handleDragEnd);
-        canvas.addEventListener('mouseleave', handleDragLeave);
-        canvas.addEventListener('touchstart', handleDragStart, { passive: false });
-        canvas.addEventListener('touchmove', handleDragMove, { passive: false });
-        canvas.addEventListener('touchend', handleDragEnd);
-    }
-
-    function bindClickListeners() {
-        canvas.addEventListener('click', handleCanvasClick);
-    }
-    
     resetButton.addEventListener('click', initGame);
     resetButtonModal.addEventListener('click', initGame);
     if (undoButton) undoButton.addEventListener('click', undoLastMove);
@@ -2350,7 +2480,8 @@ document.addEventListener('DOMContentLoaded', () => {
             totalTriangles: totalTriangles,
             requiredLineLength: REQUIRED_LINE_LENGTH,
             isScoreAndGoAgain: scoreAndGoCheckbox.checked,
-            allowShorterLines: allowShorterLinesCheckbox.checked 
+            allowShorterLines: allowShorterLinesCheckbox.checked,
+            is3DMode: is3DMode // 👈 確保傳送
         };
         aiWorker.postMessage({
             command: 'train_generation',
@@ -2535,24 +2666,20 @@ document.addEventListener('DOMContentLoaded', () => {
         w.p2DoubleVal = Math.round(w.p2DoubleVal);
     }
     
-    // 更新數字總和顯示
     function updatePointSumUI() {
         if(p1SumValEl) p1SumValEl.textContent = p1PointSum;
         if(p2SumValEl) p2SumValEl.textContent = p2PointSum;
     }
 
-    // 清空紀錄列表
     function clearMoveHistoryUI() {
         if(moveHistoryList) {
             moveHistoryList.innerHTML = '<li class="history-placeholder">尚無連線紀錄...</li>';
         }
     }
 
-    // 參數改為接受算式字串 (calcStr) 與 總和 (sum)
     function addMoveToHistoryUI(player, calcStr, sum) {
         if (!moveHistoryList) return;
         
-        // 移除 placeholder
         const placeholder = moveHistoryList.querySelector('.history-placeholder');
         if (placeholder) placeholder.remove();
 
@@ -2561,7 +2688,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const playerName = (player === 1) ? "P1" : "P2"; 
         
-        // 顯示內容： Player: 算式 = 總和
         li.innerHTML = `
             <span>${playerName}</span>
             <span>
@@ -2571,26 +2697,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         moveHistoryList.appendChild(li);
         
-        // 自動滾動到底部
         const container = document.getElementById('move-history-container');
         if (container) {
             container.scrollTop = container.scrollHeight;
         }
     }
 
-    // ============================================
-    // 連鎖解謎模式邏輯 (Puzzle Mode Logic)
-    // ============================================
-
     if (openPuzzleBtn) {
         openPuzzleBtn.addEventListener('click', () => {
             puzzlePanel.classList.remove('hidden');
-            // 自動勾選「得分後再走一步」，因為這是連鎖謎題的前提
             if (!scoreAndGoCheckbox.checked) {
                 scoreAndGoCheckbox.checked = true;
                 isScoreAndGoAgain = true;
             }
-            scoreAndGoCheckbox.disabled = true; // 鎖定此選項
+            scoreAndGoCheckbox.disabled = true; 
         });
     }
 
@@ -2601,7 +2721,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 stopPuzzleSearch();
             }
             puzzlePanel.classList.add('hidden');
-            scoreAndGoCheckbox.disabled = false; // 解鎖選項
+            scoreAndGoCheckbox.disabled = false; 
         });
     }
 
@@ -2617,7 +2737,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const minChain = parseInt(puzzleMinChainInput.value, 10) || 5;
 
-        // 傳送搜尋指令給 Worker
         aiWorker.postMessage({
             command: 'search_chain',
             gameConfig: {
@@ -2626,16 +2745,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 triangles: triangles,
                 totalTriangles: totalTriangles,
                 requiredLineLength: REQUIRED_LINE_LENGTH,
-                isScoreAndGoAgain: true, // 強制開啟
+                isScoreAndGoAgain: true, 
                 allowShorterLines: allowShorterLinesCheckbox.checked,
-                minChain: minChain // 最小連鎖數
+                minChain: minChain,
+                is3DMode: is3DMode // 👈 確保傳送
             }
         });
     }
 
     function stopPuzzleSearch() {
         isPuzzleSearching = false;
-        // 重新初始化 Worker 以中斷迴圈
         initializeAIWorker(); 
         
         startPuzzleSearchBtn.classList.remove('hidden');
@@ -2647,13 +2766,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePuzzleFound(puzzleData) {
         if (!isPuzzleSearching) return;
         
-        // 播放提示音或視覺效果 (可選)
         console.log("找到謎題!", puzzleData);
         
         const puzzleId = foundPuzzles.length + 1;
         foundPuzzles.push(puzzleData);
 
-        // 更新 UI 列表
         const emptyMsg = puzzleListEl.querySelector('.puzzle-empty');
         if (emptyMsg) emptyMsg.remove();
 
@@ -2662,40 +2779,30 @@ document.addEventListener('DOMContentLoaded', () => {
         li.innerHTML = `
             <div class="puzzle-info">
                 <span class="puzzle-title">謎題 #${puzzleId} (連鎖 ${puzzleData.chainLength} 步)</span>
-                <span class="puzzle-meta">剩餘三角形: ${puzzleData.chainLength} | 玩家: ${puzzleData.player}</span>
+                <span class="puzzle-meta">剩餘面數: ${puzzleData.chainLength} | 玩家: ${puzzleData.player}</span>
             </div>
             <button class="btn primary small" style="width: auto; padding: 5px 10px;">載入</button>
         `;
         
-        // 點擊載入謎題
         li.addEventListener('click', () => loadPuzzle(puzzleData));
         
-        puzzleListEl.prepend(li); // 新的在最上面
+        puzzleListEl.prepend(li); 
     }
 
-    // 2. 加入事件監聽器
     if (clearPuzzleListBtn) {
         clearPuzzleListBtn.addEventListener('click', () => {
-            // 如果列表已經是空的，就不做任何事
             if (foundPuzzles.length === 0) return;
-
-            // 確認提示 (避免誤觸)
             if (confirm("確定要清空所有已發現的謎題紀錄嗎？")) {
                 clearPuzzleHistory();
             }
         });
     }
 
-    // 3. 實作清空邏輯函式
     function clearPuzzleHistory() {
-        // 清空儲存謎題資料的陣列
         foundPuzzles = [];
-        
-        // 清空 UI 列表
         if (puzzleListEl) {
             puzzleListEl.innerHTML = '<li class="puzzle-empty">尚未發現謎題，請點擊「開始搜尋」...</li>';
         }
-        
         console.log("謎題紀錄已清空");
     }
 
@@ -2706,10 +2813,8 @@ document.addEventListener('DOMContentLoaded', () => {
         puzzlePanel.classList.add('hidden');
         scoreAndGoCheckbox.disabled = false;
         
-        // 載入棋盤狀態
-        initGame(); // 先重置
+        initGame(); 
 
-        // 應用 lines 狀態
         for (const id in puzzleData.lines) {
             if (lines[id]) {
                 lines[id].drawn = puzzleData.lines[id].drawn;
@@ -2718,28 +2823,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 重新計算三角形歸屬與分數
         recalculateBoardStatus();
         
-        // 設定當前玩家
         currentPlayer = puzzleData.player;
         
-        // 切換到「玩家 vs 玩家」或「玩家 vs 電腦」模式以便遊玩
-        gameModeSelect.value = "0"; // 預設切為 PvP 讓玩家自己操作
+        gameModeSelect.value = "0"; 
         gameMode = 0;
         
-        // 強制開啟規則
         scoreAndGoCheckbox.checked = true;
         isScoreAndGoAgain = true;
 
         updateUI();
         drawCanvas();
         
-        alert(`謎題已載入！\n\n目標：請畫出一條線，觸發連鎖反應，吃掉剩下的 ${puzzleData.chainLength} 個三角形！`);
+        alert(`謎題已載入！\n\n目標：請畫出一條線，觸發連鎖反應，吃掉剩下的 ${puzzleData.chainLength} 個面！`);
     }
 
-    // 初始化遊戲
     initGame();
-    // 嘗試從雲端載入設定 (若成功將覆蓋預設值)
     loadBoardFromCloud();
 });
