@@ -1,27 +1,17 @@
 /**
  * ============================================
- * AI Web Worker (ai-worker.js) - Ultimate Edition
- * * 包含所有 AI 運算邏輯:
- * 1. Minimax 演算法 (深度解鎖版)
- * 2. Smart Greedy (防守型貪婪)
- * 3. MCTS (長考版)
- * 4. 基因演算法訓練模擬 (含準確率驗證)
- * 5. 連鎖解謎搜尋 (Chain Puzzle Search)
- * 6. 模擬最高分策略 (Score-based Monte Carlo)
- * 7. 最高分佈局生成器 (High Score Generator)
- * 8. 必勝攻略 AI (★ 星型絕對座標對應字典 + 雙重陷阱)
+ * AI Web Worker (ai-worker.js) - 支援 3D 立體多面體
  * ============================================
  */
 
-// --- 1. AI 核心變數 ---
 let transpositionTable = new Map();
 let dots = [];
 let totalTriangles = 0;
 let REQUIRED_LINE_LENGTH = 1;
 
-// 遊戲規則
 let isScoreAndGoAgain = false; 
 let isAllowShorterLines = false;
+let is3DMode = false; // 👈 支援 3D
 const QUIESCENCE_MAX_DEPTH = 3;
 
 let customWeights = null; 
@@ -35,7 +25,6 @@ const DEFAULT_WEIGHTS = {
     p2DoubleVal: -100
 };
 
-// --- 2. 訊息處理 ---
 self.onmessage = (e) => {
     const data = e.data;
 
@@ -48,6 +37,7 @@ self.onmessage = (e) => {
         REQUIRED_LINE_LENGTH = data.gameState.requiredLineLength;
         isScoreAndGoAgain = data.gameState.isScoreAndGoAgain; 
         isAllowShorterLines = data.gameState.allowShorterLines;
+        is3DMode = data.gameState.is3DMode === true; // 👈 讀取 3D 模式
         
         if (aiType === 'trained' && data.weights) customWeights = data.weights;
         else customWeights = null;
@@ -64,118 +54,16 @@ self.onmessage = (e) => {
             transpositionTable.clear();
             bestMove = findBestMCTSMove(data.gameState.lines, data.gameState.triangles, player);
         } else if (aiType === 'winning_strategy') {
-            logToMain(`--- [Worker] ${playerName} 使用 必勝攻略 AI (星型對應字典 + 雙重陷阱) ---`);
+            logToMain(`--- [Worker] ${playerName} 使用 必勝攻略 AI ---`);
             transpositionTable.clear();
             
-            // 取得目前盤面上所有已被畫過的線段 ID
-            const drawnLineIds = Object.keys(data.gameState.lines).filter(id => data.gameState.lines[id].drawn);
-
-            // ==========================================
-            // 🌟 星型專屬：絕對座標開局與反擊字典
-            // ==========================================
-            // 判斷是否為星型棋盤 (12個三角形) 且對手剛畫完第一回合的線
-            if (data.gameState.totalTriangles === 12 && drawnLineIds.length <= REQUIRED_LINE_LENGTH) {
-                logToMain(`✨ 偵測到星型棋盤第一步！啟動「絕對座標對應字典」...`);
-                
-                // 1. 開局與反擊對應表 (依照您紀錄的端點座標)
-                const HARDCODED_MOVES = {
-                    "3,1_3,3": "1,0_3,1",
-                    "3,0_3,2": "1,3_3,2",
-                    "1,0_1,2": "1,2_3,3",
-                    "1,1_1,3": "1,1_3,0",
-                    "0,0_2,0": "2,0_4,0",
-                    "1,1_3,0": "1,1_1,3",
-                    "2,2_4,0": "0,0_2,2",
-                    "1,2_3,3": "1,0_1,2",
-                    "1,0_3,1": "3,1_3,3",
-                    "1,3_3,2": "3,0_3,2",
-                    "0,0_2,2": "2,2_4,0",
-                    
-                    // 交叉形狀 (X型) 或其他變化
-                    "1,2_3,1": "1,1_3,2",
-                    "1,1_3,2": "1,2_3,1",
-                    "2,0_2,2": "1,1_3,2"
-                };
-
-                // 2. 工具函式：找出線段陣列中最遠的兩個極端點
-                function getExtremeDots(segmentIds, linesDict) {
-                    let allDots = [];
-                    segmentIds.forEach(id => {
-                        if (linesDict[id]) { allDots.push(linesDict[id].p1, linesDict[id].p2); }
-                    });
-                    if(allDots.length === 0) return null;
-                    let maxDist = -1; let ext1 = allDots[0], ext2 = allDots[0];
-                    for (let i = 0; i < allDots.length; i++) {
-                        for (let j = i + 1; j < allDots.length; j++) {
-                            const dx = allDots[i].x - allDots[j].x; 
-                            const dy = allDots[i].y - allDots[j].y;
-                            const dist = dx*dx + dy*dy;
-                            if (dist > maxDist) { maxDist = dist; ext1 = allDots[i]; ext2 = allDots[j]; }
-                        }
-                    }
-                    // 確保小座標在前，大座標在後，以利字串比對
-                    if (ext1.r > ext2.r || (ext1.r === ext2.r && ext1.c > ext2.c)) {
-                        return { d1: ext2, d2: ext1 };
-                    }
-                    return { d1: ext1, d2: ext2 };
-                }
-
-                const oppExtreme = getExtremeDots(drawnLineIds, data.gameState.lines);
-                
-                if (oppExtreme) {
-                    // 組合成對手的 key，例如 "3,1_3,3"
-                    const oppKey = `${oppExtreme.d1.r},${oppExtreme.d1.c}_${oppExtreme.d2.r},${oppExtreme.d2.c}`;
-                    logToMain(`>> 辨識對手畫線端點：${oppKey}`);
-
-                    // 3. 在字典中尋找對應的 AI 反擊座標
-                    const aiTargetKey = HARDCODED_MOVES[oppKey];
-
-                    if (aiTargetKey) {
-                        logToMain(`>> 字典命中！準備反擊至：${aiTargetKey}`);
-                        
-                        // 將目標座標 "r1,c1_r2,c2" 拆解出來
-                        const [targetP1_str, targetP2_str] = aiTargetKey.split('_');
-                        const targetP1_r = parseInt(targetP1_str.split(',')[0]);
-                        const targetP1_c = parseInt(targetP1_str.split(',')[1]);
-                        const targetP2_r = parseInt(targetP2_str.split(',')[0]);
-                        const targetP2_c = parseInt(targetP2_str.split(',')[1]);
-
-                        // 產生全盤所有合法的走法
-                        const allValidMoves = findAllValidMoves(data.gameState.lines);
-                        
-                        // 找出頭尾剛好吻合目標的合法線段
-                        const matchedMove = allValidMoves.find(move => {
-                            let moveExt = getExtremeDots(move.segmentIds, data.gameState.lines);
-                            if(!moveExt) return false;
-                            return (moveExt.d1.r === targetP1_r && moveExt.d1.c === targetP1_c && 
-                                    moveExt.d2.r === targetP2_r && moveExt.d2.c === targetP2_c);
-                        });
-
-                        if (matchedMove) {
-                            logToMain(`>> 成功執行字典對應步法！`);
-                            bestMove = matchedMove;
-                            self.postMessage({ type: 'result', bestMove: bestMove });
-                            return; // 瞬間下子！
-                        } else {
-                            logToMain(`>> 警告：字典有對應，但該線段已被畫過或不合法。交給常規 AI。`);
-                        }
-                    } else {
-                        logToMain(`>> 字典中找不到對手座標的對應策略，交給常規 AI。`);
-                    }
-                }
-            }
-
-            // ==========================================
-            // ⚔️ 3. 回歸常規的「半強迫取分 / 雙重陷阱」運算 (中後盤)
-            // ==========================================
             const winningWeights = {
                 scoreScale: 1000,      
                 threatScale: 10,       
-                doubleSetupScale: 300, // ★ 高度重視半強迫取分
+                doubleSetupScale: 300, 
                 p1ThreatVal: 10,       p1DoubleVal: 300,      
                 p2ThreatVal: -10,      p2DoubleVal: -300
             };
-
             bestMove = findBestAIMove(data.gameState.lines, data.gameState.triangles, player, winningWeights);
         } else { 
             logToMain(`--- [Worker] ${playerName} 使用 Deep Minimax ---`);
@@ -186,10 +74,13 @@ self.onmessage = (e) => {
         self.postMessage({ type: 'result', bestMove: bestMove });
 
     } else if (data.command === 'train_generation') {
+        is3DMode = data.gameConfig.is3DMode === true;
         runTrainingGeneration(data.population, data.gameConfig);
     } else if (data.command === 'search_chain') {
+        is3DMode = data.gameConfig.is3DMode === true;
         runChainSearch(data.gameConfig);
     } else if (data.command === 'analyze_score_simulation') {
+        is3DMode = data.gameState.is3DMode === true;
         const result = findBestScoreSimulationMove(data.gameState.lines, data.gameState.triangles, data.gameState.player, data.gameState);
         self.postMessage({ type: 'simulation_result', bestMove: result.bestMove, avgScore: result.avgScore });
     } else if (data.command === 'generate_high_score') {
@@ -200,7 +91,6 @@ self.onmessage = (e) => {
 
 function logToMain(message) { self.postMessage({ type: 'log', message: message }); }
 
-// --- 3. 遊戲邏輯輔助函式 ---
 function getLineId(dot1, dot2) {
     if (!dot1 || !dot2) return null;
     let d1 = dot1, d2 = dot2;
@@ -208,7 +98,10 @@ function getLineId(dot1, dot2) {
     return `${d1.r},${d1.c}_${d2.r},${d2.c}`;
 }
 function isClose(val, target, tolerance = 1.5) { return Math.abs(val - target) < tolerance; }
+
 function findIntermediateDots(dotA, dotB) {
+    if (is3DMode) return [dotA, dotB]; // 👈 3D 模式沒有平面中繼點，直接回傳端點即可
+    
     const intermediateDots = [];
     const minX = Math.min(dotA.x, dotB.x) - 1; const maxX = Math.max(dotA.x, dotB.x) + 1;
     const minY = Math.min(dotA.y, dotB.y) - 1; const maxY = Math.max(dotA.y, dotB.y) + 1;
@@ -228,6 +121,14 @@ function findIntermediateDots(dotA, dotB) {
 
 function isValidPreviewLine(dotA, dotB, currentLines) {
     if (!dotA || !dotB) return false;
+    
+    // 👈 3D 模式專屬驗證：跳過平面角度與中繼點，只要這條邊存在於字典且尚未被畫過，即為合法
+    if (is3DMode) {
+        const id = getLineId(dotA, dotB);
+        if (currentLines[id] && !currentLines[id].drawn) return true;
+        return false;
+    }
+
     const dy = dotB.y - dotA.y; const dx = dotB.x - dotA.x;
     if (dx !== 0 || dy !== 0) {
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
@@ -262,9 +163,7 @@ function cloneState(lines, triangles) {
     const newTriangles = triangles.map(t => ({ ...t }));
     return { lines: newLines, triangles: newTriangles };
 }
-function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
 
-// --- 4. 評估與模擬邏輯 ---
 function getBoardHash(lines, triangles, player) {
     let lineHash = "";
     for (const id of Object.keys(lines)) {
@@ -317,13 +216,15 @@ function evaluateBoard(currentLines, currentTriangles, weights) {
                     if (currentLines[key].sharedBy === 2) p2Lines++;
                 } else { undrawnKey = key; }
             });
-            if (drawnCount === 2) {
+            // 動態邊數判斷 (因為 3D 模式的面可能是正方形或正五邊形)
+            const requiredEdgesToThreat = tri.lineKeys.length - 1; 
+            if (drawnCount === requiredEdgesToThreat) {
                 let completesTwo = false;
                 currentTriangles.forEach((otherTri, otherTriIndex) => {
                     if (otherTriIndex !== triIndex && !otherTri.filled && otherTri.lineKeys.includes(undrawnKey)) {
                         let otherDrawnCount = 0;
                         otherTri.lineKeys.forEach(okey => { if (currentLines[okey] && currentLines[okey].drawn) otherDrawnCount++; });
-                        if (otherDrawnCount === 2) completesTwo = true;
+                        if (otherDrawnCount === otherTri.lineKeys.length - 1) completesTwo = true;
                     }
                 });
                 if (p1Lines > p2Lines) { p1Threats++; if (completesTwo) p1DoubleSetups++; }
@@ -493,7 +394,10 @@ function minimax(currentLines, currentTriangles, depth, isMaximizingPlayer, alph
     transpositionTable.set(boardHash, { score: bestValue, depth: depth, flag: ttFlag }); return bestValue;
 }
 
-function getAIDepth() { return (REQUIRED_LINE_LENGTH <= 2) ? 7 : 8; }
+function getAIDepth() { 
+    // 3D 模式的面和邊較多，搜尋樹更龐大，為了流暢度將深度預設降為 4
+    return is3DMode ? 4 : ((REQUIRED_LINE_LENGTH <= 2) ? 7 : 8); 
+}
 
 function findBestAIMove(currentLines, currentTriangles, player, weights) {
     const isMaximizingPlayer = (player === 2); const MAX_DEPTH = getAIDepth();
@@ -544,17 +448,6 @@ function findBestAIMove(currentLines, currentTriangles, player, weights) {
     return bestMove;
 }
 
-// === 長考模式、模擬及輔助功能 ===
-class MCTSNode {
-    constructor(state, parent = null, move = null) {
-        this.state = state; this.parent = parent; this.move = move; this.children = [];
-        this.wins = 0; this.visits = 0; this.untriedMoves = null; 
-    }
-    getUCTValue(cParam = 1.414) {
-        if (this.visits === 0) return Infinity;
-        return (this.wins / this.visits) + cParam * Math.sqrt(Math.log(this.parent.visits) / this.visits);
-    }
-}
 function findBestMCTSMove(initialLines, initialTriangles, rootPlayer) { return findBestGreedyMove(initialLines, initialTriangles, rootPlayer); }
 function runTrainingGeneration(population, gameConfig) {}
 function runChainSearch(config) {}
